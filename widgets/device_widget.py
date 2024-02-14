@@ -3,7 +3,7 @@ import time
 import numpy
 import os
 
-from PyQt6.QtWidgets import QHBoxLayout, QCheckBox
+from PyQt5.QtWidgets import QHBoxLayout, QCheckBox
 from .base_control_widgets import SubControlModule, FrameDock, StateSaver
 from .plot_widget import Plot, smooth_average
 

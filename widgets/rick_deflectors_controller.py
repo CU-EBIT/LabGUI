@@ -1,6 +1,6 @@
 import time
 
-from PyQt6.QtWidgets import QHBoxLayout, QLabel, QFrame, QVBoxLayout
+from PyQt5.QtWidgets import QHBoxLayout, QLabel, QFrame, QVBoxLayout
 
 from .device_widget import DeviceController
 from .drivers.deflectors import DeflectorSupply, setXV, setYV, setXV_2, setYV_2

@@ -4,7 +4,7 @@ import utils.data_client as data_client
 data_client.ADDR = ("localhost", 20002)
 
 import main_gui
-from PyQt6.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication
 
 def make_modules(main):
         from widgets.test_device import TestDevice

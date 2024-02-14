@@ -12,8 +12,8 @@ import threading
 
 import pyqtgraph as pg
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
-from PyQt6 import QtCore, QtGui
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5 import QtCore, QtGui
 
 from modules.module import ClientWrapper, BetterAxisItem, BaseSettings
 

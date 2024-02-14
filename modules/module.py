@@ -1,6 +1,6 @@
-from PyQt6.QtWidgets import QComboBox, QLabel, QCheckBox, QHBoxLayout, QVBoxLayout
-from PyQt6.QtWidgets import QHBoxLayout, QWidget
-from PyQt6 import QtCore
+from PyQt5.QtWidgets import QComboBox, QLabel, QCheckBox, QHBoxLayout, QVBoxLayout
+from PyQt5.QtWidgets import QHBoxLayout, QWidget
+from PyQt5 import QtCore
 import pyqtgraph as pg
 from pyqtgraph import AxisItem
 

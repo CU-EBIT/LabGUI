@@ -2,8 +2,8 @@ import time
 import os
 import json
 
-from PyQt6 import QtCore, QtWidgets
-from PyQt6.QtWidgets import QWidget, QFrame, QLabel, QLineEdit,\
+from PyQt5 import QtCore, QtWidgets
+from PyQt5.QtWidgets import QWidget, QFrame, QLabel, QLineEdit,\
       QPushButton, QHBoxLayout, QTableWidget, QFileDialog, QVBoxLayout, QCheckBox
 
 from pyqtgraph.dockarea.DockArea import Dock

@@ -1,6 +1,6 @@
 import time
 
-from PyQt6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QFrame, QVBoxLayout
+from PyQt5.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QFrame, QVBoxLayout
 
 from .device_widget import DeviceController
 from .drivers.glassman_controller import GlassmanController
