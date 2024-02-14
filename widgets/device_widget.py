@@ -195,6 +195,7 @@ class DeviceReader(DeviceController):
         self.avgs = numpy.full(int(_max_points), self.value)
 
         self.do_log = True
+        self.do_log_O = False
         self.log_button = QCheckBox("Log Values")
         self.log_button.setChecked(True)
         self.log_button.clicked.connect(self.toggle_log)
