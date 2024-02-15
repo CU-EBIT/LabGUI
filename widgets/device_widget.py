@@ -23,7 +23,9 @@ class DeviceController(SubControlModule):
         # Set this first so that we have a name before the makeFrame in super().__init__
         self.name = name
 
-        super().__init__(parent.data_client, **args)
+        super().__init__(**args)
+
+        self.client = parent.data_client
             
         self.ended = False
         self._alive_ = False

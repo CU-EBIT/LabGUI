@@ -62,7 +62,6 @@ class BaseDataServer:
             # Close connection when done
             self.connection.close()
 
-
     def on_open(self, address, _):
         '''processes the OPEN comand, presently doesn't do anything'''
         # TODO Decide if we want multiple threads for python version?

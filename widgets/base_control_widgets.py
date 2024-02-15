@@ -449,8 +449,18 @@ class SaveModule(SubControlModule):
             saver.filename = _oldfile
 
 class StateSaver:
-    def __init__(self, name, value_map, save_dir="./settings", log_dir="./logs") -> None:
+    def __init__(self, name, value_map, save_dir="./settings", log_dir="./logs", warn_many=True) -> None:
+        """Constructs a new StateSaver, this will also make the appropriate save directory and load the values if present.
 
+        If multiple of these of the same name are constructed, successive ones will have numbers appended to the end of the names.
+
+        Args:
+            name (str): Name of the file to use
+            value_map (dict): map of key: value for things to save
+            save_dir (str, optional): Directory to save to. Defaults to "./settings".
+            log_dir (str, optional): Directory for logging (if needed). Defaults to "./logs".
+            warn_many (bool, optional): If true, will warn if name already exists. Defaults to True.
+        """
         if name in SAVER_NAMES:
             n = 1
             name_1 = f"{name}_{n}"
@@ -461,7 +471,8 @@ class StateSaver:
                     name_1 = f"{name}_{n}"
                     if not name_1 in SAVER_NAMES:
                         break
-            print(f"Warning, tried creating a new saver for {name}, instead using {name_1}")
+            if warn_many:
+                print(f"Warning, tried creating a new saver for {name}, instead using {name_1}")
             name = name_1
 
         SAVER_NAMES[name] = self
@@ -523,11 +534,19 @@ class StateSaver:
                     elif hasattr(box, "_saver_load_"):
                         box._saver_load_(v)
 
-    def save(self):
+    def save(self, mark_all_changed=False):
+        """Called to save the file. If you do not call on_changed manually, then set mark_all_changed true.
+
+        Args:
+            mark_all_changed (bool, optional): If true, will update the datamap before saving. Defaults to False.
+        """
+        if mark_all_changed:
+            for _, value in self.value_map.items():
+                self.on_changed(value, False)
         with open(self.filename, 'w') as file:
             json.dump(self.data, file, indent = 2)
 
-    def on_changed(self, value):
+    def on_changed(self, value, do_save=True):
         key = self.rev_map[value]
         if isinstance(value, QLineEdit):
             self.data[key] = value.text()
@@ -540,7 +559,8 @@ class StateSaver:
             self.data[key] = value.value
         elif hasattr(value, "_saver_save_"):
             self.data[key] = value._saver_save_()
-        self.save()
+        if do_save:
+            self.save()
 
 ###
 ### Here we have some general purpose QWidgets
@@ -554,11 +574,11 @@ class LineEdit(QLineEdit):
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
-        if event.key() == QtCore.Qt.Key_Up:
+        if event.key() == Key_Up:
             self.upPressed.emit()
-        if event.key() == QtCore.Qt.Key_Down:
+        if event.key() == Key_Down:
             self.downPressed.emit()
-        if event.key() == QtCore.Qt.Key_Enter:
+        if event.key() == Key_Enter:
             self.enterPressed.emit()
 
 class ControlButton(QPushButton):
