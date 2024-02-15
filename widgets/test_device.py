@@ -18,14 +18,15 @@ class TestDevice(DeviceReader):
             self.settings.title_fmt = f'Latest: {{:.3f}} ???'
 
     def make_file_header(self):
-        # Adjust the header to indicate amps
+        # Adjust the header to indicate ???
         return "Local Time\tValue (???)\n"
     
     def format_values_for_print(self, timestamp, value):
-        # We read only every 10-300ms or so, so .2f is plenty of resolution on the timestamp
+        # We "read" only every 50ms or so, so .2f is plenty of resolution on the timestamp
         return f"{timestamp:.2f}\t{value:.3e}\n"
     
     def open_device(self):
+        # We don't actually have a device, so we pretend to open something
         self.device = 1
         self.valid = True
         return self.device != None
@@ -33,11 +34,14 @@ class TestDevice(DeviceReader):
     def read_device(self):
         if self.device is None:
             return False, 0
+        # Report some random value
         var = random.random()
-        time.sleep(0.05)
+        # Sleep to emulate a read delay in the device
+        time.sleep(0.05 + var * 1e-3)
         return True, var
 
     def close_device(self):
         if self.device is None:
             return
+        # nothing was opened to close earlier
         self.device = None
