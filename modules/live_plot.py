@@ -68,6 +68,9 @@ class PlotModule(FigureModule):
 
         self.set_saves("Live Plotter")
 
+    def populate_save_values(self, values):
+        values['settings'] = self.settings
+
     def make_dummy_plotter(root):
         plotter = PlotModule(root)
         plotter.dummy = True

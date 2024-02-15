@@ -330,7 +330,6 @@ class Settings(BaseSettings):
             option = setting._option
             old_selected = setting.get_value()
 
-            # option = setting.option
             keys = []
             for key, value in _map.items():
                 if value != None and isinstance(value[1], float):

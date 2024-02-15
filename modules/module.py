@@ -11,7 +11,7 @@ from pyqtgraph import AxisItem
 from utils import input_parser
 from utils import data_client
 from widgets.base_control_widgets import getGlobalStyleSheet
-from widgets.base_control_widgets import LineEdit, FrameDock, ControlLine
+from widgets.base_control_widgets import LineEdit, FrameDock, ControlLine, StateSaver
 
 class BaseSettings:
     def __init__(self):
@@ -234,14 +234,28 @@ class Module:
         self.placement = 'top'
         self._dock_area = None
         self._stopped = False
+        self.saves = False
 
     def set_name(self, name):
         self.name = name
 
     def set_saves(self, name):
         self.set_name(name)
-        
+        values = {}
+        self.populate_save_values(values)
+        self.saver = StateSaver(name, values, warn_many=False)
+        self.on_loaded()
+        self.saves = True
+
+    def populate_save_values(self, values):
+        return
+
+    def on_loaded(self):
+        return
     
+    def save(self):
+        self.saver.save(True)
+
     def get_layout(self):
         if self._layout == None:
             self.create_layout()
@@ -272,6 +286,12 @@ class Module:
         for setting in self.get_settings():
             key = setting._label
             callback = setting._callback
+            if self.saves:
+                def wrapped():
+                    if setting._callback is not None:
+                        setting._callback()
+                    self.save()
+                callback = wrapped
             self._root.edit_options(self._dock, setting, key, callback)
 
     def open_help(self):
