@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
-import utils.data_client as data_client
-data_client.ADDR = ("localhost", 20002)
+### If running a server manually, uncomment below and replace this ADDR accordingly
+# import utils.data_client as data_client
+# data_client.ADDR = ("host", 20002) 
 
 import main_gui
-from PyQt6.QtWidgets import QApplication
+from utils.qt_helper import QApplication
 
 def make_modules(main):
         from widgets.test_device import TestDevice
@@ -15,7 +16,7 @@ def make_modules(main):
         _module = module
 
         module = TestDevice(main, id=25)
-        main.plot_widget.addDock(module.dock, position='left')
+        main.plot_widget.addDock(module.dock, 'left', _module.dock)
         main._modules.append(module)
         _module = module
 

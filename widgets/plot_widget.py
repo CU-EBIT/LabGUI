@@ -12,8 +12,8 @@ import threading
 
 import pyqtgraph as pg
 
-from PyQt6.QtWidgets import QWidget, QVBoxLayout
-from PyQt6 import QtCore, QtGui
+#  * import due to just being things from Qt
+from utils.qt_helper import *
 
 from modules.module import ClientWrapper, BetterAxisItem, BaseSettings
 
@@ -134,9 +134,7 @@ def clear_plot(key, reload=False, start=None, end=0):
     if do_run:
         pre_fill(key, start, end)
 
-_data_client = ClientWrapper() # Client we use for getting values
-
-def get_values(first, key):
+def get_values(client, first, key):
     '''This updates the values in _plots for key, it will also try to pre-fill with existing values if first is true'''
     try:
         # Try pre-filling array
@@ -149,7 +147,7 @@ def get_values(first, key):
     # Now try filling new value in
     
     plots = _plots[key]
-    read = _data_client.get_value(key, True)
+    read = client.get_value(key, True)
     # Skip if not present
     if read is None:
         return
@@ -181,7 +179,7 @@ def get_values(first, key):
 __threads__ = {} # Cache of threads to prevent the GC from eating them
 __update_rate_ = 2.5e-1
 
-def run_plot_thread(key):
+def run_plot_thread(client, key):
     if key in __threads__:
         return
     cache = [None, True, time.time()]
@@ -200,7 +198,7 @@ def run_plot_thread(key):
         lastTime = perf_counter()
         n = 0
         while cache[1]:
-            get_values(first, key)
+            get_values(client, first, key)
             first = False
             now = perf_counter()
             dt = now - lastTime
@@ -340,6 +338,8 @@ class Plot(QWidget):
 
         self.show_avg = True # Whether we include a smoothed plot
 
+        self.client = ClientWrapper()
+
         self.settings = Settings() # Settings object we use
 
         # Some cache values for updating/limits
@@ -471,7 +471,7 @@ class Plot(QWidget):
         try:
             for (key,_,_) in self.keys:
                 if key not in __threads__:
-                    run_plot_thread(key)
+                    run_plot_thread(self.client, key)
                     continue
                 if key not in _plots:
                     continue

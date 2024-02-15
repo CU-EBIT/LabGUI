@@ -1,13 +1,12 @@
-from PyQt6.QtWidgets import QComboBox, QLabel, QCheckBox, QHBoxLayout, QVBoxLayout
-from PyQt6.QtWidgets import QHBoxLayout, QWidget
-from PyQt6 import QtCore
-import pyqtgraph as pg
-from pyqtgraph import AxisItem
-
 import time
 import threading
 from math import ceil, floor
 import numpy
+
+#  * import due to just being things from Qt
+from utils.qt_helper import *
+import pyqtgraph as pg
+from pyqtgraph import AxisItem
 
 from utils import input_parser
 from utils import data_client
@@ -496,8 +495,33 @@ global _value_thread
 _value_thread = None
 global ended
 ended = False
+global local_server
+local_server = None
 def update_values():
     global _value_thread
+    global local_server
+
+    if data_client.ADDR == None and local_server == None:
+        print("Making Server!")
+        import utils.data_server as server
+        import socket
+        from utils.data_client import HELLO, DELIM, BUFSIZE
+        _hello = HELLO + DELIM + HELLO
+        # Check for a server already running
+        try:
+            connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+            connection.settimeout(0.1)
+            connection.sendto(_hello, server.ADDR)
+            msgFromServer = connection.recvfrom(BUFSIZE)
+            print(msgFromServer)
+        except:
+            # In this case, we start our own server locally.
+            local_server = server.BaseDataServer()
+            # have it make a thread, and start it
+            local_server.thread = local_server.make_thread()
+            local_server.thread.start()
+        data_client.ADDR = server.ADDR
+
     client = data_client.BaseDataClient(data_client.ADDR)
 
     def run():
@@ -509,9 +533,6 @@ def update_values():
             t_total += time.time() - start
         dt_per = t_total / 20
         do_all = USE_ALL and dt_per < avg_t / 2
-
-        n = 0
-        # m = 0
 
         while(not ended):
             start = time.time()
@@ -529,16 +550,6 @@ def update_values():
             sleep = avg_t - dt
             if sleep > 0:
                 time.sleep(sleep)
-            # else:
-            #     m += 1
-            # t_total += dt
-            n += 1
-            if n == 100:
-                client.init_connection()
-            #     print(f"Average time: {t_total/n:.3f}s, Too longs: {m}, totals: {n}")
-                n = 0
-            #     t_total = 0
-            #     m = 0
 
     _value_thread = threading.Thread(target=run, daemon=True)
     _value_thread.start()

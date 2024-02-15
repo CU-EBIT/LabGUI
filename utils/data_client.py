@@ -318,6 +318,8 @@ class BaseDataClient:
                         print('resetting connection')
                     self.init_connection()
             except Exception as err:
+                # Attempt to reset the connection
+                self.init_connection()
                 msg = f'Error getting value for {key}! {err}'
                 # Timeouts can happen, so only print ones that did not
                 if DEBUG and not 'timed out' in msg:

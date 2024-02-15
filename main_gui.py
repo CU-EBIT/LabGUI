@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QMainWindow, QMenu, QApplication, QLabel, QHBoxLayout, QPushButton, QWidget, QVBoxLayout
-from PyQt6.QtGui import QAction # This line is all that changed from Qt5 to Qt6
-from PyQt6.QtGui import QIcon
+
+#  * import due to just being things from Qt
+from utils.qt_helper import *
+
 from pyqtgraph.dockarea.DockArea import DockArea
 
 from widgets.base_control_widgets import FrameDock

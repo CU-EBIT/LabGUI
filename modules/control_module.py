@@ -1,6 +1,8 @@
 from .module import Menu, ClientWrapper, FigureModule
 
-from PyQt6.QtWidgets import QHBoxLayout
+#  * import due to just being things from Qt
+from utils.qt_helper import *
+
 from pyqtgraph.dockarea.DockArea import DockArea
 from widgets.base_control_widgets import getLocalStyleSheet
 
