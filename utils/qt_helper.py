@@ -14,9 +14,9 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QComboBox, QLabel, QCheckBox, QHBoxLayout, QVBoxLayout,\
         QHBoxLayout, QWidget, QFrame, QPushButton, QLineEdit, QFileDialog, QTableWidget,\
-        QMainWindow, QMenu, QApplication, QLayout
-from PyQt6 import QtCore, QtWidgets, QtGui
-from PyQt6.QtGui import QAction, QIcon
+        QMainWindow, QMenu, QApplication, QLayout, QAction
+from PyQt5 import QtCore, QtWidgets, QtGui
+from PyQt5.QtGui import QIcon
 
 Key_Up = QtCore.Qt.Key_Up
 Key_Down = QtCore.Qt.Key_Down
