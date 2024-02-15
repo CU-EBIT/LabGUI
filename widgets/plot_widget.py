@@ -419,6 +419,9 @@ class Plot(QWidget):
         self.y_2_axis = y_2_axis
         self.x_axis = x_axis
 
+        # Whether we assume x-axis is timestamps, and cull based on settings
+        self.cull_x_axis = True
+
         # Callback run at the beginning of each timer tick
         self.tick_callback = lambda:()
         
@@ -591,15 +594,18 @@ class Plot(QWidget):
                 continue
 
             # Find values which are in appropriate range
-            end = times[-1] - self.settings.log_length * 3600.0
-            max_end = len(times) - rolled - 1
-            last = numpy.argwhere(times < end)
-            if len(last) > 2:
-                self.start_index = last[-2][0]
+            if self.cull_x_axis:
+                end = times[-1] - self.settings.log_length * 3600.0
+                max_end = len(times) - rolled - 1
+                last = numpy.argwhere(times < end)
+                if len(last) > 2:
+                    self.start_index = last[-2][0]
+                else:
+                    self.start_index = 0
+                self.start_index = max(self.start_index, max_end)
+                times = times[self.start_index:]
             else:
                 self.start_index = 0
-            self.start_index = max(self.start_index, max_end)
-            times = times[self.start_index:]
             
             # If we do show average, then compute that next
             if self.show_avg:
