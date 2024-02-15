@@ -11,7 +11,13 @@ class RickDeflectors(DeviceController):
     """
     Controller for using Tim's power supply to control Rick's deflectors.
     """    
-    def __init__(self, parent, port="COM10", name="Rick's Deflector Control"):
+    def __init__(self, parent, port, name="Rick's Deflector Control"):
+        """
+
+        Args:
+            parent (FigureModule): the module we are made from
+            port (str): serial port to connect to
+        """
         super().__init__(parent, name, fixed_size=True)
 
         self.X1 = 0

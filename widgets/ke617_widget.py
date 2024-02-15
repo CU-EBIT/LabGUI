@@ -11,7 +11,14 @@ class KE617(DeviceReader):
     Zerocheck is also applied whenever this reader closes, unless the button to disable that is pressed.
     
     This uses pyvisa to read from the device via the given GPIB address.'''
-    def __init__(self, parent, addr=27, data_key=None):
+    def __init__(self, parent, addr, data_key=None):
+        """
+
+        Args:
+            parent (FigureModule): the module we are made from
+            addr (int): GPIB Address
+            data_key (str, optional): key to update with our value. Defaults to None.
+        """
         super().__init__(parent, data_key, name=f"KE617-{addr}", axis_title=f"Current on KE617-{addr} (pA)")
         self.addr = addr
 
