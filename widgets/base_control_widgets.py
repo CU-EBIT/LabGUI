@@ -2,9 +2,8 @@ import time
 import os
 import json
 
-from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtWidgets import QWidget, QFrame, QLabel, QLineEdit,\
-      QPushButton, QHBoxLayout, QTableWidget, QFileDialog, QVBoxLayout, QCheckBox
+#  * import due to just being things from Qt
+from utils.qt_helper import *
 
 from pyqtgraph.dockarea.DockArea import Dock
 from pyqtgraph.dockarea.Dock import DockLabel
@@ -229,13 +228,7 @@ class SubControlModule:
     
     It provides methods for passing re-size commmands to modules, which are any object that provides an update_values function
     '''
-    def __init__(self, client=None, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True):
-        self.frame = QFrame()
-        self.frame.setLineWidth(2)
-        self.frame.setFrameShape(QFrame.Shape.WinPanel)
-        self.frame.setFrameShadow(QFrame.Shadow.Sunken)
-        self.frame.setContentsMargins(2,2,2,2)
-        self.client = client
+    def __init__(self, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True):
 
         self.tick = 0
         self.updated = -10
@@ -243,7 +236,15 @@ class SubControlModule:
 
         self._modules = []
         self.oldDPI = 0
-        
+
+        self.makeFrame(menu_fn, help_fn, make_dock)
+
+    def makeFrame(self, menu_fn=None, help_fn=None, make_dock=True):
+        self.frame = QFrame()
+        self.frame.setLineWidth(2)
+        self.frame.setFrameShape(QFrame.Shape.WinPanel)
+        self.frame.setFrameShadow(QFrame.Shadow.Sunken)
+        self.frame.setContentsMargins(2,2,2,2)
         if make_dock:
             self.dock = FrameDock(widget=self.frame,menu_fn=menu_fn,help_fn=help_fn)
 
@@ -394,8 +395,8 @@ class FolderSelector:
         return self._layout
 
 class SaveModule(SubControlModule):
-    def __init__(self, client=None, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True):
-        super().__init__(client, fixed_size, menu_fn, help_fn, make_dock)
+    def __init__(self, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True):
+        super().__init__(fixed_size, menu_fn, help_fn, make_dock)
         
         self._layout = QHBoxLayout()
 

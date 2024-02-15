@@ -3,7 +3,9 @@ import time
 import numpy
 import os
 
-from PyQt5.QtWidgets import QHBoxLayout, QCheckBox
+#  * import due to just being things from Qt
+from utils.qt_helper import *
+
 from .base_control_widgets import SubControlModule, FrameDock, StateSaver
 from .plot_widget import Plot, smooth_average
 
@@ -16,12 +18,12 @@ class DeviceController(SubControlModule):
     for opening and closing the device.
     """
     def __init__(self, parent, name="???", **args):
-        super().__init__(parent.data_client, **args)
-
-        self.dock.label.setText(name)
 
         self.parent = parent
+        # Set this first so that we have a name before the makeFrame in super().__init__
         self.name = name
+
+        super().__init__(parent.data_client, **args)
             
         self.ended = False
         self._alive_ = False
@@ -30,17 +32,20 @@ class DeviceController(SubControlModule):
 
         self.made_thread = False
 
-        self._layout = QHBoxLayout()
-        self._layout.setSpacing(0)
-
         self.paused = True
         self.active_button = QCheckBox("Enabled")
         self.active_button.setChecked(True)
         self.active_button.clicked.connect(self.toggle_paused)
 
+        self._layout = QHBoxLayout()
+        self._layout.setSpacing(0)
         self._layout.addWidget(self.active_button)
 
         self.frame.setLayout(self._layout)
+
+    def makeFrame(self, menu_fn=None, help_fn=None, make_dock=True):
+        super().makeFrame(menu_fn, help_fn, make_dock)
+        self.dock.label.setText(self.name)
 
     def collect_saved_values(self, values):
         """Add values to the array to save, implementers should call super().collect_saved_values(values)"""
@@ -183,7 +188,7 @@ class DeviceReader(DeviceController):
     sm7110_widget: reading a serial device via pyserial
 """
     def __init__(self, parent, data_key=None, name="???", axis_title="???", plot_title="???", **args):
-        super().__init__(parent, name, **args)
+        super().__init__(parent, name, menu_fn=self.open_settings, **args)
 
         self.log_file_name = None
         self.value = 0
@@ -199,8 +204,6 @@ class DeviceReader(DeviceController):
         self.log_button = QCheckBox("Log Values")
         self.log_button.setChecked(True)
         self.log_button.clicked.connect(self.toggle_log)
-
-        self._layout.addWidget(self.log_button)
 
         self.plot_widget = Plot()
         self.settings = self.plot_widget.settings
@@ -221,8 +224,20 @@ class DeviceReader(DeviceController):
 
         self.plot_dock = FrameDock(widget=self.plot_widget,menu_fn=self.open_settings,help_fn=None)
         self.plot_dock.label.setText(name)
-        self.dock.addWidget(self.plot_dock)
-        self.plot_dock.area = parent.plot_widget
+
+        self.full_layout = QVBoxLayout()
+        self._layout = QHBoxLayout()
+        self._layout.setSpacing(0)
+        self._layout.addWidget(self.active_button)
+        self._layout.addWidget(self.log_button)
+
+        self.makeFrame(menu_fn=self.open_settings)
+        self.frame.setLayout(self.full_layout)
+        self.full_layout.addLayout(self._layout)
+        self.full_layout.addWidget(self.plot_widget)
+
+        # self.dock.addWidget(self.plot_dock)
+        # self.plot_dock.area = parent.plot_widget
 
     def set_data_key(self, data_key):
         """
