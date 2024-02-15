@@ -554,11 +554,11 @@ class LineEdit(QLineEdit):
 
     def keyPressEvent(self, event):
         super().keyPressEvent(event)
-        if event.key() == QtCore.Qt.Key_Up:
+        if event.key() == Key_Up:
             self.upPressed.emit()
-        if event.key() == QtCore.Qt.Key_Down:
+        if event.key() == Key_Down:
             self.downPressed.emit()
-        if event.key() == QtCore.Qt.Key_Enter:
+        if event.key() == Key_Enter:
             self.enterPressed.emit()
 
 class ControlButton(QPushButton):

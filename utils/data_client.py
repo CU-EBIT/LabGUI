@@ -237,8 +237,12 @@ class BaseDataClient:
         self.reads = {}
         self.values = {}
         self.init_connection()
+        self.custom_port = custom_port
         if custom_port:
             self.select()
+
+    def __del__(self):
+        self.close()
 
     def change_port(self, port):
         '''Changes the port we connect over'''
@@ -256,7 +260,8 @@ class BaseDataClient:
     def close(self):
         if self.connection is not None:
             try:
-                self.connection.sendto(_close_cmd, self.addr)
+                if self.custom_port:
+                    self.connection.sendto(_close_cmd, self.addr)
                 self.connection.close()
             except Exception as err:
                 print(err)

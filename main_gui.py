@@ -151,8 +151,7 @@ class MasterGui(QMainWindow):
 
         self._menus.append(self.help_menu)
 
-        self.aboutMessage = 'Analysis code for SAFARI data files\nimport a data file using the File menu.'
-        self.copyrightMessage = 'Copyright © 2021 Patrick Johnson All Rights Reserved.'
+        self.aboutMessage = 'LabGUI for interacting with lab equipment'
 
         _file_menu._options["exit"] = self.close
 

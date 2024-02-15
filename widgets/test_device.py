@@ -19,7 +19,7 @@ class TestDevice(DeviceReader):
 
     def make_file_header(self):
         # Adjust the header to indicate amps
-        return "Local Time\Value (???)\n"
+        return "Local Time\tValue (???)\n"
     
     def format_values_for_print(self, timestamp, value):
         # We read only every 10-300ms or so, so .2f is plenty of resolution on the timestamp
@@ -31,10 +31,8 @@ class TestDevice(DeviceReader):
         return self.device != None
 
     def read_device(self):
-
         if self.device is None:
             return False, 0
-
         var = random.random()
         time.sleep(0.05)
         return True, var

@@ -45,6 +45,33 @@ class BaseSettings:
 
     def on_window_created(self, window):
         return
+    
+    def make_option_dropdown(self, setting, key):     
+        setting.option = QComboBox()
+        opts = self._options_[key]
+        opt_fmt = None
+        if key in self._opt_fmts_:
+            opt_fmt = self._opt_fmts_[key][0]
+        if opt_fmt is None:
+            opt_fmt = str
+        opts_str = [opt_fmt(x) for x in opts]
+        setting.option.addItems(opts_str)
+        if self._default_option:
+            setting.option.setCurrentText(self._default_option)
+        if key in self._options_callbacks_:
+            setting.option.activated.connect(self._options_callbacks_[key])
+
+        def value_getter():
+            opt_ufmt = None
+            opts = setting.option.currentText()
+            if key in self._opt_fmts_:
+                opt_ufmt = self._opt_fmts_[key][1]
+            if opt_ufmt is not None:
+                opts = opt_ufmt(opts)
+            return opts
+        setting.getter = value_getter
+        setting.setter = lambda x: setting.select_option(x, opts_str)
+
 
 class SettingOption:
     def __init__(self, value, key, thing, layout, force_update) -> None:
@@ -60,31 +87,7 @@ class SettingOption:
         self.option = None
         attr = getattr(thing, key)
         if key in thing._options_:
-            self.option = QComboBox()
-            opts = thing._options_[key]
-            opt_fmt = None
-            if key in thing._opt_fmts_:
-                opt_fmt = thing._opt_fmts_[key][0]
-            if opt_fmt is None:
-                opt_fmt = str
-            opts_str = [opt_fmt(x) for x in opts]
-            self.option.addItems(opts_str)
-            if thing._default_option:
-                self.option.setCurrentText(thing._default_option)
-
-            if key in thing._options_callbacks_:
-                self.option.activated.connect(thing._options_callbacks_[key])
-
-            def value_getter():
-                opt_ufmt = None
-                opts = self.option.currentText()
-                if key in thing._opt_fmts_:
-                    opt_ufmt = thing._opt_fmts_[key][1]
-                if opt_ufmt is not None:
-                    opts = opt_ufmt(opts)
-                return opts
-            self.getter = value_getter
-            self.setter = lambda x: self.select_option(x, opts_str)
+            thing.make_option_dropdown(self, key)
         elif isinstance(attr, bool):
             self.option = QCheckBox()
             self.option.setChecked(attr)
@@ -113,12 +116,14 @@ class SettingOption:
                 self.ctrl.ufmt = ufmt
             except:
                 pass
-
             self.option.setText(fmtter(attr))
             self.setter = lambda x: self.option.setText(fmtter(x))
 
         self.layout.addWidget(self.label)
-        self.layout.addWidget(self.option)
+        if isinstance(self.option, QLayout):
+            self.layout.addLayout(self.option)
+        else:
+            self.layout.addWidget(self.option)
         self.layout.addWidget(self.units)
 
         self.layout.addStretch(0)
@@ -568,6 +573,13 @@ class ClientWrapper:
             self.set_client.connection.settimeout(1)
             return self.set_client.get_value(key)
         return __values__[key]
+
+    def get_all(self):
+        if USE_ALL:
+            return __values__
+        self.set_client.init_connection()
+        self.set_client.connection.settimeout(1)
+        return self.set_client.get_all()
 
     def get_float(self, key):
         return self.get_value(key)

@@ -317,6 +317,65 @@ class Settings(BaseSettings):
             ret = _plots[self.source_key]
         return ret
     
+    def make_option_dropdown(self, setting, key):
+        # The super() call makes a QComboBox as setting.option, we
+        # need to replace it with a layout of the box, with an update button
+        # where the update button will run a get_all from dataclient
+        # and then update the dropdown box with all valid keys
+        super().make_option_dropdown(setting, key)
+
+        def on_update():
+            client = ClientWrapper()
+            _map = client.get_all()
+            option = setting._option
+            old_selected = setting.get_value()
+
+            # option = setting.option
+            keys = []
+            for key, value in _map.items():
+                if value != None and isinstance(value[1], float):
+                    keys.append(key)
+            # Clear initial options
+            while option.count():
+                option.removeItem(0)
+            keys.sort()
+            opt_fmt = None
+            if key in self._opt_fmts_:
+                opt_fmt = self._opt_fmts_[key][0]
+            if opt_fmt is None:
+                opt_fmt = str
+            opts_str = [opt_fmt(x) for x in keys]
+            option.addItems(opts_str)
+            if old_selected in keys:
+                option.setCurrentText(old_selected)
+            elif self._default_option in keys:
+                option.setCurrentText(self._default_option)
+            if key in self._options_callbacks_:
+                option.activated.connect(self._options_callbacks_[key])
+
+        setting._option = setting.option
+
+        def value_getter():
+            opt_ufmt = None
+            opts = setting._option.currentText()
+            if key in self._opt_fmts_:
+                opt_ufmt = self._opt_fmts_[key][1]
+            if opt_ufmt is not None:
+                opts = opt_ufmt(opts)
+            return opts
+        # Call this once to init the list
+        on_update()
+        setting.getter = value_getter
+
+        button = QPushButton("Update List")
+        button.clicked.connect(on_update)
+        layout = QHBoxLayout()
+        layout.setSpacing(0)
+        layout.addWidget(setting._option)
+        layout.addWidget(button)
+        layout.addStretch(0)
+        setting.option = layout
+
     def _saver_save_(self):
         values = {}
         for key in self._names_.keys():
