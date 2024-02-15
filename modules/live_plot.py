@@ -2,6 +2,7 @@ from .module import FigureModule
 from .module import Menu
 
 from widgets.plot_widget import Plot
+from widgets.base_control_widgets import addCrossHairs
 
 # These are default axis titles and scaling factors for the live plots
 _option_defaults_ = {
@@ -101,6 +102,9 @@ class PlotModule(FigureModule):
 
     def make_plot(self):
         self.plot_widget.start()
+
+    def post_figure(self):
+        self.get_plot_layout().addWidget(addCrossHairs(self.plot_widget.plot_widget))
 
     def get_menus(self):
         _menu = Menu()

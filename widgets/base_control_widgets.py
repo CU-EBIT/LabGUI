@@ -114,10 +114,21 @@ def addCrossHairs(plot_widget):
     def mouseMoved(evt):
         pos = evt
         if plot_widget.sceneBoundingRect().contains(pos):
-            vb = plot_widget.getPlotItem().vb
+            plot = plot_widget.getPlotItem()
+            vb = plot.vb
             mousePoint = vb.mapSceneToView(pos)
-            x_msg = f"{mousePoint.x():.3f}"
-            y_msg = f"{mousePoint.y():.3f}"
+            log = plot.ctrl.logYCheck.isChecked()
+            x = mousePoint.x()
+            y = mousePoint.y()
+            if log:
+                import math
+                # Convert to log coords
+                y = 10 ** y
+                pass
+            x_msg = f"{x:.3f}"
+            y_msg = f"{y:.3f}"
+            if y > 1e3 or y < 1e-1:
+                y_msg = f"{y:.3e}"
             coord_label.setText(f"x={x_msg}, y={y_msg}")
 
     plot_widget.scene().sigMouseMoved.connect(mouseMoved)
