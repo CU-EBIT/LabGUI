@@ -207,7 +207,7 @@ class DeviceReader(DeviceController):
         self.log_button.setChecked(True)
         self.log_button.clicked.connect(self.toggle_log)
 
-        self.plot_widget = Plot()
+        self.make_plot()
         self.settings = self.plot_widget.settings
         self.settings.y_axis_fmt = '{:.3f}'
         if plot_title != '???':
@@ -240,6 +240,11 @@ class DeviceReader(DeviceController):
 
         # self.dock.addWidget(self.plot_dock)
         # self.plot_dock.area = parent.plot_widget
+
+    def make_plot(self):
+        """This makes the plot_widget, implementers can add custom arguments to their plot, etc by replacing this function
+        """
+        self.plot_widget = Plot()
 
     def set_data_key(self, data_key):
         """
