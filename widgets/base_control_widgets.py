@@ -710,7 +710,7 @@ class SingleDisplayWidget(QLabel):
     def set_label_sizes(self, size):
         size *= scale(self.get_dpi())
         fm = self.fontMetrics()
-        w = size*fm.width("0")
+        w = size*fm.averageCharWidth()
         self.setMaximumWidth(int(w))
         self.setMinimumWidth(int(w))
 
@@ -758,7 +758,7 @@ class SingleInputWidget(LineEdit):
         fm = self.fontMetrics()
         m = self.textMargins()
         c = self.contentsMargins()
-        w = size*fm.width('0')+m.left()+m.right()+c.left()+c.right()
+        w = size*fm.averageCharWidth()+m.left()+m.right()+c.left()+c.right()
         self.setMaximumWidth(int(w))
         self.setMinimumWidth(int(w))
 
@@ -850,7 +850,7 @@ class ValuesAndPower(QWidget):
 
         label_chars *= dpi_scale
         fm = self.set_label.fontMetrics()
-        w = label_chars*fm.width("0")
+        w = label_chars*fm.averageCharWidth()
         self.set_label.setMaximumWidth(int(w))
         self.set_label.setMinimumWidth(int(w))
 
