@@ -10,7 +10,10 @@ from modules.module import BetterAxisItem
 class MSO2012(DeviceReader):
     '''A Tektronix MSO 2012 Mixed Signal Oscilloscope
 
-    This uses pyvisa to communicate with the device.
+    This uses pyvisa to communicate with the device. 
+    
+    If the scales are changed manually on the scope, you need to toggle the enabled button to reload it here. 
+    The time to look those up is as long as to get an entire reading...
     
     This presently displays the 2 channels for the scope. It is not yet set to save logs of the output though.
     '''
@@ -26,7 +29,7 @@ class MSO2012(DeviceReader):
         # Set this first as it is needed in super().__init__
         self.channels = channels
 
-        super().__init__(parent, data_key=None, name=f"MSO2012", axis_title=f"??? (units)")
+        super().__init__(parent, data_key=None, name=f"MSO2012", axis_title=f"Signal (V)")
 
         self.plot_data = {key:[[], [], [], False, 0] for key in channels}
 
@@ -35,7 +38,6 @@ class MSO2012(DeviceReader):
         self.settings.log_scale = False
         self.settings.scale = 1
 
-        
         self.times = None
         self.values = None
         self.avgs = None
@@ -44,6 +46,7 @@ class MSO2012(DeviceReader):
         self.plot_widget = Plot(x_axis=BetterAxisItem('bottom'))
         self.plot_widget.cull_x_axis = False
         self.plot_widget.show_avg = False
+        self.plot_widget.label_x = "Time (μs)"
 
     def set_data_key(self, _):
 
@@ -78,14 +81,15 @@ class MSO2012(DeviceReader):
             self.device.write('data:composition singular_yt')
             self.device.write('data:width 2')
             self.device.write('data:enc RIB')
-            if len(self.channels) > 0:
-                self.device.write(f'data:source {self.channels[0]}')
-            length = float(self.device.query('WFMOUTPRE:RECORDLENGTH?')) # read resolution (# of points)
-            self.datalength = int(float(length)/2) + 1
 
-            # The below lines take 300-500ms to run, so only do it rarely
-            self.x = float(self.device.query('wfmoutpre:xincr?'))
-            self.y = float(self.device.query('wfmoutpre:ymult?'))
+            self.x = {}
+            self.y = {}
+
+            for channel in self.channels:
+                self.device.write(f'data:source {channel}')
+                # The below lines take 300-500ms to run, so only do it rarely
+                self.x[channel] = float(self.device.query('wfmoutpre:xincr?'))
+                self.y[channel] = float(self.device.query('wfmoutpre:ymult?'))
                 
             # inst.write('acquire:state on') # acquire data on the next trigger
             self.device.query('*OPC?') # block until data is present (supposedly, more manual delays to be safe)
@@ -120,6 +124,7 @@ class MSO2012(DeviceReader):
         digits = int(vars[1:2])
         vars = vars[digits+3:]
         vars = struct.unpack(f'{int(len(vars) / 2)}h',vars)
-        vars = numpy.array(vars) * self.y
-        times = numpy.linspace(0, self.x, num=len(vars))
+        vars = numpy.array(vars) * self.y[channel]
+        s = self.x[channel] * len(vars) * 1e6
+        times = numpy.linspace(-s/2, s/2, num=len(vars))
         return vars[0:-1], times[0:-1]
