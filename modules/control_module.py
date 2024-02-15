@@ -1,4 +1,4 @@
-from .module import Menu, ClientWrapper, FigureModule
+from modules.module import Menu, ClientWrapper, FigureModule
 
 #  * import due to just being things from Qt
 from utils.qt_helper import *

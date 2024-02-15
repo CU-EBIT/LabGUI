@@ -5,6 +5,7 @@ import json
 #  * import due to just being things from Qt
 from utils.qt_helper import *
 
+import pyqtgraph as pg
 from pyqtgraph.dockarea.DockArea import Dock
 from pyqtgraph.dockarea.Dock import DockLabel
 
@@ -97,6 +98,41 @@ def scale(dpi):
         float: dpi scaled by 1/96
     """
     return dpi / 96
+
+def addCrossHairs(plot_widget):
+    """Adds a coordinate tooltip similar to the crosshairs example from pyqtgraph
+
+    Args:
+        plot_widget (Plot): plot to add coordinate tooltip to
+
+    Returns:
+        QLabel: the label with the coordinate information
+    """
+
+    coord_label = QLabel()
+
+    def mouseMoved(evt):
+        pos = evt
+        if plot_widget.sceneBoundingRect().contains(pos):
+            plot = plot_widget.getPlotItem()
+            vb = plot.vb
+            mousePoint = vb.mapSceneToView(pos)
+            log = plot.ctrl.logYCheck.isChecked()
+            x = mousePoint.x()
+            y = mousePoint.y()
+            if log:
+                import math
+                # Convert to log coords
+                y = 10 ** y
+                pass
+            x_msg = f"{x:.3f}"
+            y_msg = f"{y:.3f}"
+            if y > 1e3 or y < 1e-1:
+                y_msg = f"{y:.3e}"
+            coord_label.setText(f"x={x_msg}, y={y_msg}")
+
+    plot_widget.scene().sigMouseMoved.connect(mouseMoved)
+    return coord_label
 
 class FrameDockLabel(DockLabel):
     '''
@@ -261,11 +297,11 @@ class SubControlModule:
         return widget_dpi(self.frame)
 
     def resize(self, w, h):
-        w *= scale(self.get_dpi())
-        self.frame.setFixedWidth(int(w))
-        h *= scale(self.get_dpi())
-        self.frame.setFixedHeight(int(h))
         if self.fixed_size:
+            w *= scale(self.get_dpi())
+            self.frame.setFixedWidth(int(w))
+            h *= scale(self.get_dpi())
+            self.frame.setFixedHeight(int(h))
             self.dock.topLayout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetFixedSize)
             self.dock.layout.setSizeConstraint(QtWidgets.QLayout.SizeConstraint.SetFixedSize)
     
@@ -680,7 +716,6 @@ class SingleDisplayWidget(QLabel):
 
     def update_values(self):
         var = self.client.get_value(self.key)
-        print(self.key, var)
         if var is not None:
             self.value = var[1]
         self.update_labels()
@@ -954,7 +989,7 @@ class TableDisplayWidget(QTableWidget):
                 m += 1
             n += 1
         if not self.clickable:
-            self.setEditTriggers(QtWidgets.QTableWidget.NoEditTriggers)
+            self.setEditTriggers(TableNoEdit)
             self.clearSelection()
         self.init = False
         self.setHorizontalHeaderLabels(self.headers)

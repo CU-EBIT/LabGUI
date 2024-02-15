@@ -6,8 +6,8 @@ import os
 #  * import due to just being things from Qt
 from utils.qt_helper import *
 
-from .base_control_widgets import SubControlModule, FrameDock, StateSaver
-from .plot_widget import Plot, smooth_average
+from widgets.base_control_widgets import SubControlModule, FrameDock, StateSaver, addCrossHairs
+from widgets.plot_widget import Plot, smooth_average
 
 # Change this if you want to change how many points are kept in memory.
 _max_points = 1e5
@@ -237,6 +237,7 @@ class DeviceReader(DeviceController):
         self.frame.setLayout(self.full_layout)
         self.full_layout.addLayout(self._layout)
         self.full_layout.addWidget(self.plot_widget)
+        self.full_layout.addWidget(addCrossHairs(self.plot_widget.plot_widget))
 
         # self.dock.addWidget(self.plot_dock)
         # self.plot_dock.area = parent.plot_widget
