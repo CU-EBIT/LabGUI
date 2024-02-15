@@ -12,6 +12,11 @@ class DualGlassman(DeviceController):
     This controls 2 analog glassman power supplies, a 3kV and a 5kV one, using a usb NIDAQ
     """
     def __init__(self, parent, name="Dual Glassman"):
+        """
+
+        Args:
+            parent (FigureModule): the module we are made from
+        """
         super().__init__(parent, name, fixed_size=True)
 
         self.V5kV = 0

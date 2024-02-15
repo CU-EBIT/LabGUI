@@ -9,7 +9,14 @@ class SM7110(DeviceReader):
     Presently this is set to read current, with an averaging of 16 samples.
     
     This uses pyserial to read the device from the given serial address (port argument)'''
-    def __init__(self, parent, port="COM4", data_key=None):
+    def __init__(self, parent, port, data_key=None):
+        """
+
+        Args:
+            parent (FigureModule): the module we are made from
+            port (str): serial port to connect to
+            data_key (str, optional): key to update with our value. Defaults to None.
+        """
         super().__init__(parent, data_key, name=f"SM7110", axis_title=f"SM7110 (pA)")
         self.port = port
 
