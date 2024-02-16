@@ -513,7 +513,7 @@ class BetterAxisItem(AxisItem):
 
 __values__ = {}
 __keys__ = []
-__open__ = False
+__open__ = True
 USE_ALL = True
 
 global _value_thread

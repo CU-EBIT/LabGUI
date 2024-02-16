@@ -44,9 +44,5 @@ if __name__ == '__main__':
     import modules.live_plot as live_plot
     main_gui.__modules__.append(live_plot.PlotModule)
 
-    import modules.module as module
-    # This makes the first supported module open automatically
-    module.__open__ = True
-
     # Start the gui
     main_gui.start()

@@ -380,8 +380,4 @@ if __name__ == '__main__':
     import modules.live_plot as live_plot
     __modules__.append(live_plot.PlotModule)
 
-    # Doing this will make it open first one automatically
-    import modules.module as module
-    module.__open__ = True
-
     start()
