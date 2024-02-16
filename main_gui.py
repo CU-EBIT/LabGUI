@@ -365,13 +365,14 @@ class MasterGui(QMainWindow):
         self._main.addDock(dialog, 'top', dock)
 
 def start():
+    import sys
+    app =  QApplication(sys.argv)
     update_values()
     if len(instances) == 0:
         spawn_gui_proc()
+    sys.exit(app.exec())
 
 if __name__ == '__main__':
-    import sys
-    app = QApplication(sys.argv)
 
     import modules.control_module as control_module
     __modules__.append(control_module.MainModule)
@@ -384,4 +385,3 @@ if __name__ == '__main__':
     module.__open__ = True
 
     start()
-    sys.exit(app.exec())

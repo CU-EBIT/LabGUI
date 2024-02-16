@@ -4,9 +4,6 @@
 # import utils.data_client as data_client
 # data_client.ADDR = ("host", 20002) 
 
-import main_gui
-from utils.qt_helper import QApplication
-
 def make_modules(main):
     """Here we add a few of our own modules.
 
@@ -37,8 +34,7 @@ def make_modules(main):
     _module = module
 
 if __name__ == '__main__':
-    import sys
-    app = QApplication(sys.argv)
+    import main_gui
 
     # Add some modules to run
     import modules.control_module as control_module
@@ -54,4 +50,3 @@ if __name__ == '__main__':
 
     # Start the gui
     main_gui.start()
-    sys.exit(app.exec())
