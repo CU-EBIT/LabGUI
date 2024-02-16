@@ -32,6 +32,8 @@ class BaseSettings:
         self._entries_ = {}
         # Array of tuples, of ("Label", Callback) for push buttons
         self._buttons_ = []
+        # Map of buttons by label, populated from above list
+        self._button_objs_ = {}
         # A help string to show in the help menu
         self.help_text = ''
         # This is the label to click to ge the above help text,

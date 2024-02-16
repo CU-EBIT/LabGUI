@@ -353,6 +353,7 @@ class MasterGui(QMainWindow):
             btn = QPushButton(button[0])
             btn.clicked.connect(button[1])
             buttons.addWidget(btn)
+            thing._button_objs_[button[0]] = btn
         
         update_button = QPushButton("Update")
         update_button.clicked.connect(update)
