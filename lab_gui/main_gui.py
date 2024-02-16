@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
 #  * import due to just being things from Qt
-from utils.qt_helper import *
+from .utils.qt_helper import *
 
 from pyqtgraph.dockarea.DockArea import DockArea
 
-from widgets.base_control_widgets import FrameDock
-from widgets.base_control_widgets import getGlobalStyleSheet
-from widgets.base_control_widgets import getLocalStyleSheet
+from .widgets.base_control_widgets import FrameDock
+from .widgets.base_control_widgets import getGlobalStyleSheet
+from .widgets.base_control_widgets import getLocalStyleSheet
 
-import modules.module as module
-from modules.module import Menu, __values__, SettingOption, update_values, Module
+from .modules import module
+from .modules.module import Menu, __values__, SettingOption, update_values, Module
 
 __modules__ = []
 
@@ -365,13 +365,14 @@ class MasterGui(QMainWindow):
         self._main.addDock(dialog, 'top', dock)
 
 def start():
+    import sys
+    app =  QApplication(sys.argv)
     update_values()
     if len(instances) == 0:
         spawn_gui_proc()
+    sys.exit(app.exec())
 
 if __name__ == '__main__':
-    import sys
-    app = QApplication(sys.argv)
 
     import modules.control_module as control_module
     __modules__.append(control_module.MainModule)
@@ -379,9 +380,4 @@ if __name__ == '__main__':
     import modules.live_plot as live_plot
     __modules__.append(live_plot.PlotModule)
 
-    # Doing this will make it open first one automatically
-    import modules.module as module
-    module.__open__ = True
-
     start()
-    sys.exit(app.exec())

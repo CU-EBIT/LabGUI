@@ -1,7 +1,7 @@
 import time
 
 #  * import due to just being things from Qt
-from utils.qt_helper import *
+from ..utils.qt_helper import *
 
 from .device_widget import DeviceController
 from .drivers.glassman_controller import GlassmanController

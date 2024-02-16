@@ -1,7 +1,7 @@
 # from PyQt6.QtCore import Qt
 # from PyQt6.QtWidgets import QComboBox, QLabel, QCheckBox, QHBoxLayout, QVBoxLayout,\
 #         QHBoxLayout, QWidget, QFrame, QPushButton, QLineEdit, QFileDialog, QTableWidget,\
-#         QMainWindow, QMenu, QApplication, QLayout
+#         QMainWindow, QMenu, QApplication, QLayout, QGridLayout
 # from PyQt6 import QtCore, QtWidgets, QtGui
 # from PyQt6.QtGui import QAction, QIcon
 
@@ -14,12 +14,12 @@
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QComboBox, QLabel, QCheckBox, QHBoxLayout, QVBoxLayout,\
         QHBoxLayout, QWidget, QFrame, QPushButton, QLineEdit, QFileDialog, QTableWidget,\
-        QMainWindow, QMenu, QApplication, QLayout, QAction
+        QMainWindow, QMenu, QAction, QApplication, QLayout, QGridLayout
 from PyQt5 import QtCore, QtWidgets, QtGui
 from PyQt5.QtGui import QIcon
 
-Key_Up = QtCore.Qt.Key_Up
-Key_Down = QtCore.Qt.Key_Down
-Key_Enter = QtCore.Qt.Key_Enter
+Key_Up = QtCore.Qt.Key.Key_Up
+Key_Down = QtCore.Qt.Key.Key_Down
+Key_Enter = QtCore.Qt.Key.Key_Enter
 
-TableNoEdit = QtWidgets.QTableWidget.NoEditTriggers
+TableNoEdit = QtWidgets.QTableWidget.EditTrigger.NoEditTriggers

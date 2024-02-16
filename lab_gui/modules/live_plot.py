@@ -1,14 +1,14 @@
 from .module import FigureModule
 from .module import Menu
 
-from widgets.plot_widget import Plot
-from widgets.base_control_widgets import addCrossHairs
+from ..widgets.plot_widget import Plot
+from ..widgets.base_control_widgets import addCrossHairs
 
 # These are default axis titles and scaling factors for the live plots
 _option_defaults_ = {
     'Pressure_HV_Source': ('Source Pressure (mbar)', 1, '{:.2e}', True),
-    'Pressure_HV_Section 1': ('Section 2 Pressure (mbar)', 1, '{:.2e}', True),
-    'Pressure_HV_Section 2': ('Section 1 Pressure (mbar)', 1, '{:.2e}', True),
+    'Pressure_HV_Section 1': ('Section 1 Pressure (mbar)', 1, '{:.2e}', True),
+    'Pressure_HV_Section 2': ('Section 2 Pressure (mbar)', 1, '{:.2e}', True),
 
     'Temperature_Source Flange': ('Source Flange Temperature (K)', 1, '{:.1f}'),
     'Temperature_Section 1': ('Section 1 Temperature (K)', 1, '{:.1f}'),
