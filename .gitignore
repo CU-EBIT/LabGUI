@@ -40,7 +40,7 @@ pip-delete-this-directory.txt
 htmlcov/
 settings/
 _run_.py
-test_*
+_test_*
 .tox/
 .nox/
 .coverage
