@@ -5,6 +5,8 @@ from .device_widget import DeviceReader
 from .base_control_widgets import ControlButton, ControlLine, LineEdit, scale
 from ..utils.qt_helper import *
 
+# Based on https://github.com/circuit-specialists/PowerSupply_ElectronicLoad_Control/blob/master/PowerSupplies/pps2116a.py
+
 class PPS2116A(DeviceReader):
     def __init__(self, parent, addr, data_keys=[None, None]):
         super().__init__(parent, data_key=data_keys[0], name=f"PPS2116A", axis_title=f"Signal (V)")
