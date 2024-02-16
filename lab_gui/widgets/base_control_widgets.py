@@ -354,13 +354,21 @@ class ControlLine:
         self.box.enterPressed.connect(self.enter_pressed)
         self.down_to_0 = True
 
-    def update_number(self, text, pos, dir):
+    def get_value(self):
+        return self.ufmt(self.box.text())
+
+    def adjust_number(self, old, new):
+        return new
+
+    def update_number(self, pos, dir):
+        text = self.box.text()
         char = text[pos-1]
         exp = 'e' in text
 
         if(char != ".") or dir == 0:
             try:
-                var = self.ufmt(text)
+                var = self.get_value()
+                old_var = var
                 
                 if dir != 0:
                     # find index of a . if present
@@ -378,9 +386,11 @@ class ControlLine:
                         dV /= 10
                     var += dV
                 
+                var = self.ufmt(var)
+                var = self.adjust_number(old_var, var)
+                
                 var = max(self.min, var)
                 var = min(self.max, var)
-                var = self.ufmt(var)
 
                 self.box.setText(self.set_fmt.format(var))
                 self.on_update()
@@ -394,20 +404,17 @@ class ControlLine:
         pos = self.box.cursorPosition()
         if pos <= 0:
             return
-        text = self.box.text()
-        self.update_number(text, pos, 1)
+        self.update_number(pos, 1)
 
     def down_arrow(self):
         pos = self.box.cursorPosition()
         if pos <= 0:
             return
-        text = self.box.text()
-        self.update_number(text, pos, -1)
+        self.update_number(pos, -1)
 
     def enter_pressed(self):
         pos = self.box.cursorPosition()
-        text = self.box.text()
-        self.update_number(text, pos, 0)
+        self.update_number(pos, 0)
 
 SAVER_NAMES = {}
 

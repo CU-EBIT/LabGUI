@@ -14,6 +14,7 @@ Another way is to add this repository to yours as a submodule. An example of thi
 -   Keithley Instruments DMM6500 Multimeter
 -   HIOKI SM7110 Super Megaohm Meter
 -   Tektronix MSO 2012 Mixed Signal Oscilloscope
+-   Tektronix TDS 2004B Four Channel Digital Storage Oscilloscope
 -   Pfeiffer Vacuum TPG 256 A pressure gauge Controller
 -   Custom microcontroller controlled HV power supply
 -   NIDAQ based controls for some glassman HV supplies
