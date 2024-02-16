@@ -45,6 +45,8 @@ class DeviceController(SubControlModule):
 
         self.frame.setLayout(self._layout)
 
+        self.cmd_queue = []
+
     def makeFrame(self, menu_fn=None, help_fn=None, make_dock=True):
         super().makeFrame(menu_fn, help_fn, make_dock)
         self.dock.label.setText(self.name)
@@ -77,6 +79,16 @@ class DeviceController(SubControlModule):
         and then re-opened after a delay of self.reboot_time
         """
         pass
+
+    def queue_cmd(self, callable):
+        """queues a callable to run on the device thread. this is intended for use with buttons, etc.
+
+        The functions are run before do_device_update, and are each wrapped in a try-except block
+        
+        Args:
+            callable (function): Function to run
+        """
+        self.cmd_queue.append(callable)
 
     def toggle_paused(self):
         """Toggles whether we are paused. When paused, we release control of the device, ie close_device is called."""
@@ -141,6 +153,13 @@ class DeviceController(SubControlModule):
 
             # Try to access the device, and close it if it fails.
             try:
+                try:
+                    while len(self.cmd_queue):
+                        # pop the element and then call it
+                        self.cmd_queue.pop()()
+                except Exception as err:
+                    print("Error running a queued command!")
+                    print(err)
                 self.do_device_update()
             except Exception as err:
                 print(f"Error while trying to access {self.name}")
@@ -238,9 +257,6 @@ class DeviceReader(DeviceController):
         self.full_layout.addLayout(self._layout)
         self.full_layout.addWidget(self.plot_widget)
         self.full_layout.addWidget(addCrossHairs(self.plot_widget.plot_widget))
-
-        # self.dock.addWidget(self.plot_dock)
-        # self.plot_dock.area = parent.plot_widget
 
     def make_plot(self):
         """This makes the plot_widget, implementers can add custom arguments to their plot, etc by replacing this function

@@ -91,7 +91,6 @@ class MSO2012(DeviceReader):
                 self.x[channel] = float(self.device.query('wfmoutpre:xincr?'))
                 self.y[channel] = float(self.device.query('wfmoutpre:ymult?'))
                 
-            # inst.write('acquire:state on') # acquire data on the next trigger
             self.device.query('*OPC?') # block until data is present (supposedly, more manual delays to be safe)
         except Exception as err:
             print(f"Error opening MSO2012 {err}")
