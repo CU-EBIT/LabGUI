@@ -3,9 +3,8 @@ import os
 import json
 
 #  * import due to just being things from Qt
-from utils.qt_helper import *
+from ..utils.qt_helper import *
 
-import pyqtgraph as pg
 from pyqtgraph.dockarea.DockArea import Dock
 from pyqtgraph.dockarea.Dock import DockLabel
 

@@ -13,9 +13,9 @@ import threading
 import pyqtgraph as pg
 
 #  * import due to just being things from Qt
-from utils.qt_helper import *
+from ..utils.qt_helper import *
 
-from modules.module import ClientWrapper, BetterAxisItem, BaseSettings
+from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
 
 # Tuple of (address, port) for log access
 DATA_LOG_HOST = None

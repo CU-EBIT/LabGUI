@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 
 #  * import due to just being things from Qt
-from utils.qt_helper import *
+from .utils.qt_helper import *
 
 from pyqtgraph.dockarea.DockArea import DockArea
 
-from widgets.base_control_widgets import FrameDock
-from widgets.base_control_widgets import getGlobalStyleSheet
-from widgets.base_control_widgets import getLocalStyleSheet
+from .widgets.base_control_widgets import FrameDock
+from .widgets.base_control_widgets import getGlobalStyleSheet
+from .widgets.base_control_widgets import getLocalStyleSheet
 
-import modules.module as module
-from modules.module import Menu, __values__, SettingOption, update_values, Module
+from .modules import module
+from .modules.module import Menu, __values__, SettingOption, update_values, Module
 
 __modules__ = []
 

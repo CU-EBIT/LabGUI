@@ -1,8 +1,8 @@
 from .module import FigureModule
 from .module import Menu
 
-from widgets.plot_widget import Plot
-from widgets.base_control_widgets import addCrossHairs
+from ..widgets.plot_widget import Plot
+from ..widgets.base_control_widgets import addCrossHairs
 
 # These are default axis titles and scaling factors for the live plots
 _option_defaults_ = {

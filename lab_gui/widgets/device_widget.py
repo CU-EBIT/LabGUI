@@ -4,10 +4,10 @@ import numpy
 import os
 
 #  * import due to just being things from Qt
-from utils.qt_helper import *
+from ..utils.qt_helper import *
 
-from widgets.base_control_widgets import SubControlModule, FrameDock, StateSaver, addCrossHairs
-from widgets.plot_widget import Plot, smooth_average
+from ..widgets.base_control_widgets import SubControlModule, FrameDock, StateSaver, addCrossHairs
+from ..widgets.plot_widget import Plot, smooth_average
 
 # Change this if you want to change how many points are kept in memory.
 _max_points = 1e5

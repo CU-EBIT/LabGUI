@@ -1,10 +1,11 @@
-from modules.module import Menu, ClientWrapper, FigureModule
+from pyqtgraph.dockarea.DockArea import DockArea
+
+from .module import Menu, ClientWrapper, FigureModule
 
 #  * import due to just being things from Qt
-from utils.qt_helper import *
+from ..utils.qt_helper import *
 
-from pyqtgraph.dockarea.DockArea import DockArea
-from widgets.base_control_widgets import getLocalStyleSheet
+from ..widgets.base_control_widgets import getLocalStyleSheet
 
 def make_modules(main):
         '''

@@ -5,7 +5,7 @@ import numpy
 from .device_widget import DeviceReader
 from .plot_widget import Plot
 
-from modules.module import BetterAxisItem
+from ..modules.module import BetterAxisItem
 
 class MSO2012(DeviceReader):
     '''A Tektronix MSO 2012 Mixed Signal Oscilloscope

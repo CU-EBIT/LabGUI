@@ -3,15 +3,15 @@ import threading
 from math import ceil, floor
 import numpy
 
-#  * import due to just being things from Qt
-from utils.qt_helper import *
 import pyqtgraph as pg
 from pyqtgraph import AxisItem
 
-from utils import input_parser
-from utils import data_client
-from widgets.base_control_widgets import getGlobalStyleSheet
-from widgets.base_control_widgets import LineEdit, FrameDock, ControlLine, StateSaver
+#  * import due to just being things from Qt
+from ..utils.qt_helper import *
+from ..utils import input_parser
+from ..utils import data_client
+from ..widgets.base_control_widgets import getGlobalStyleSheet
+from ..widgets.base_control_widgets import LineEdit, FrameDock, ControlLine, StateSaver
 
 class BaseSettings:
     def __init__(self):
@@ -522,15 +522,16 @@ global ended
 ended = False
 global local_server
 local_server = None
+
 def update_values():
     global _value_thread
     global local_server
 
     if data_client.ADDR == None and local_server == None:
-        print("Making Server!")
-        import utils.data_server as server
+        from ..utils import data_server as server
         import socket
-        from utils.data_client import HELLO, DELIM, BUFSIZE
+        from ..utils.data_client import HELLO, DELIM, BUFSIZE
+        print("Making Server!")
         _hello = HELLO + DELIM + HELLO
         # Check for a server already running
         try:
