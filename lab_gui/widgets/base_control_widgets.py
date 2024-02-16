@@ -659,6 +659,10 @@ class ControlButton(QPushButton):
             self.setStyleSheet(f"background-color : {self.colours[0] if self.predicate(self.value) else self.colours[1]}")
         return self.value
 
+    def setChecked(self, a0: bool) -> None:
+        self.value = a0
+        return super().setChecked(a0)
+
     def update_values(self):
         if self.disabled:
             return

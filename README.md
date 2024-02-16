@@ -18,3 +18,4 @@ Another way is to add this repository to yours as a submodule. An example of thi
 -   Pfeiffer Vacuum TPG 256 A pressure gauge Controller
 -   Custom microcontroller controlled HV power supply
 -   NIDAQ based controls for some glassman HV supplies
+-   Circuit Specialists PPS 2116A Programmable DC Power Supply
