@@ -66,6 +66,8 @@ class PPS2116A(DeviceReader):
         h *= scale(self.get_dpi())
         self._frame.setFixedHeight(int(h))
 
+        self._layout.addStretch(0)
+
     def lock(self):
         while(self.mutex):
             pass
