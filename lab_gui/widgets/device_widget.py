@@ -333,7 +333,12 @@ class DeviceReader(DeviceController):
         log_dir = f'{log_dir}/{self.name}/{time.strftime("%Y-%m-%d")}'
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        self.log_file_name = f'{log_dir}/{self.name}_{time.strftime("%H_%M_%S")}.log'
+        if self.data_key == "None":
+            self.data_key = None
+        
+        name = self.name if self.data_key is None else self.data_key
+        self.data_key_O = self.data_key
+        self.log_file_name = f'{log_dir}/{name}_{time.strftime("%H_%M_%S")}.log'
         with open(self.log_file_name, 'w') as file:
             file.write(self.make_file_header())
         
@@ -379,7 +384,7 @@ class DeviceReader(DeviceController):
             plots[1] = values
             plots[2] = avgs
 
-            if self.do_log != self.do_log_O:
+            if self.do_log != self.do_log_O or self.data_key != self.data_key_O:
                 if self.do_log and self.name != "???":
                     self.make_log_file()
                 else:
