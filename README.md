@@ -19,3 +19,4 @@ Another way is to add this repository to yours as a submodule. An example of thi
 -   Custom microcontroller controlled HV power supply
 -   NIDAQ based controls for some glassman HV supplies
 -   Circuit Specialists PPS 2116A Programmable DC Power Supply
+-   TENMA 72-2715 Programmable Power Supply
