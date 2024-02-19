@@ -604,6 +604,11 @@ class StateSaver:
         if do_save:
             self.save()
 
+    def close(self):
+        """Call this when the owner is closed. This will free up the name saved, so that when it re-opens it is likely to get the same settings.
+        """
+        del SAVER_NAMES[self.name]
+
 ###
 ### Here we have some general purpose QWidgets
 ###

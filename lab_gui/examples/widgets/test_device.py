@@ -1,6 +1,6 @@
 import random
 import time
-from .device_widget import DeviceReader
+from ...widgets.device_widget import DeviceReader
 
 class TestDevice(DeviceReader):
     '''Pretends to be a device that responds with numbers'''

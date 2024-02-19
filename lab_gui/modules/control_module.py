@@ -54,22 +54,9 @@ class MainModule(FigureModule):
 
         self._running_ = False
 
-    def get_menus(self):
-        
-        _menu = Menu()
-        # Add some options, the value is the function to run on click
-        _menu._options["open_module"] = self.start_plotting
-        _menu._opts_order.append("open_module")
-        # Adds some help menu text for these as well
-        _menu._helps["open_module"] = 'Opens Control Module'
-        # Adds labels for the non-separator values
-        _menu._labels["open_module"] = "Control Module"
-        self.set_name("Control Module")
-        # Specify a label for the menu
-        _menu._label = "Modules"
+        self.module_source = make_modules
 
-        # Returns an array of menus (only 1 in this case)
-        return [_menu]
+        self.init_menu_naming(menu_name="Modules", key="open_control_module", name="Control Module", help="Opens Control Module")
 
     def on_stop(self):
         if self._stopped:
@@ -99,10 +86,8 @@ class MainModule(FigureModule):
     def post_figure(self):
         self._modules.clear()
         # Here is where you should add things that you want to have on after the main plot has been added to the canvas
-        self.core_layout = QHBoxLayout()
-        self._layouts.append(self.core_layout)
 
-        make_modules(self)
+        self.module_source(self)
 
         for mod in self._modules:
             mod.on_init()
