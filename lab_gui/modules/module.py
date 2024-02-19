@@ -334,6 +334,7 @@ class Module:
     def on_stop(self):
         self._stopped = True
         if self.saves:
+            self.saver.save(True)
             self.saver.close()
 
     def dock_closed(self, *_):
@@ -429,6 +430,7 @@ class FigureModule(Module):
         return False
 
     def on_stop(self):
+        super().on_stop()
         if self._stopped:
             return
         self.active = False
