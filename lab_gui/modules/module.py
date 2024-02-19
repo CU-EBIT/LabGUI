@@ -237,9 +237,23 @@ class Module:
         self._dock_area = None
         self._stopped = False
         self.saves = False
+        self.default_init_menu = False
+        self.menu_action = None
+
+        # If this is true, this is considered a copied module
+        # for cases where you have multiple of the same module allowed
+        self.dummy = False
 
     def set_name(self, name):
         self.name = name
+
+    def init_menu_naming(self, menu_name="Modules", key=None, name=None, help="Opens Module"):
+        self.menu_key = key
+        if name is not None:
+            self.name = name
+        self.menu_name = menu_name
+        self.menu_help = help
+        self.default_init_menu = True
 
     def set_saves(self, name):
         self.set_name(name)
@@ -319,7 +333,9 @@ class Module:
 
     def on_stop(self):
         self._stopped = True
-    
+        if self.saves:
+            self.saver.close()
+
     def dock_closed(self, *_):
         self.on_stop()
         self._dock = None
@@ -357,6 +373,24 @@ class Module:
         return []
 
     def get_menus(self):
+
+        if self.default_init_menu:
+            _menu = Menu()
+            # Add some options, the value is the function to run on click
+            _menu._options[self.menu_key] = self.menu_action
+            _menu._opts_order.append(self.menu_key)
+            # Adds some help menu text for these as well
+            _menu._helps[self.menu_key] = help
+            # Adds labels for the non-separator values
+            _menu._labels[self.menu_key] = self.name
+            self.set_name(self.name)
+            # Specify a label for the menu
+            _menu._label = self.menu_name
+
+            # Returns an array of menus (only 1 in this case)
+            return [_menu]
+
+
         return []
 
 pg.setConfigOption('background', (200, 201, 199))
@@ -385,6 +419,8 @@ class FigureModule(Module):
         self.place_canvas = True
 
         self.update_rate = 50
+
+        self.menu_action = self.start_plotting
 
     def using_main_window(self):
         return False

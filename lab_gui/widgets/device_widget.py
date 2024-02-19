@@ -197,6 +197,7 @@ class DeviceController(SubControlModule):
             # ms sleep to not peg core
             time.sleep(0.001)
         self.run_thread = None
+        self.saver.close()
 
 class DeviceReader(DeviceController):
     """

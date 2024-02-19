@@ -331,9 +331,9 @@ class Settings(BaseSettings):
             old_selected = setting.get_value()
 
             keys = []
-            for key, value in _map.items():
+            for _key, value in _map.items():
                 if value != None and isinstance(value[1], float):
-                    keys.append(key)
+                    keys.append(_key)
             # Clear initial options
             while option.count():
                 option.removeItem(0)

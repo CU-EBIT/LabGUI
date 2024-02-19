@@ -51,7 +51,6 @@ class PlotModule(FigureModule):
         self.data_raw = None
         self.data_avg = None
         self.last_stamp = 0.0
-        self.dummy = False
         self.plot_widget = Plot()
         self.settings = self.plot_widget.settings
         self.settings._options_ = _options_
