@@ -6,13 +6,13 @@ import os
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
 
-from ..widgets.base_control_widgets import SubControlModule, FrameDock, StateSaver, addCrossHairs
+from ..widgets.base_control_widgets import SubControlWidget, FrameDock, StateSaver, addCrossHairs
 from ..widgets.plot_widget import Plot, smooth_average
 
 # Change this if you want to change how many points are kept in memory.
 _max_points = 1e5
 
-class DeviceController(SubControlModule):
+class DeviceController(SubControlWidget):
     """
     Generic Device Controller template. This provides a thread to access the device on, as well as stub functions
     for opening and closing the device.

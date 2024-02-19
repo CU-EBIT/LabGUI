@@ -257,7 +257,7 @@ class FrameDock(Dock):
         super().containerChanged(c)
         self.setStyleSheet(getGlobalStyleSheet())
 
-class SubControlModule:
+class SubControlWidget:
     '''
     A Basic module for a control. This consists of a QFrame inside a FrameDock. 
     
@@ -436,7 +436,7 @@ class FolderSelector:
         self._layout.addWidget(self.button)
         return self._layout
 
-class SaveModule(SubControlModule):
+class SaveModule(SubControlWidget):
     def __init__(self, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True):
         super().__init__(fixed_size, menu_fn, help_fn, make_dock)
         
