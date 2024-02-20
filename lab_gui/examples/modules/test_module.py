@@ -46,9 +46,21 @@ class ExampleModule(MainModule):
 
         from lab_gui.widgets.base_control_widgets import SaveModule
 
-        module = SaveModule(self)
+        module = SaveModule()
         # By not specifying location, it goes below the rest.
         self.plot_widget.addDock(module.dock)
+        self._modules.append(module)
+        _module = module
+
+        from ..widgets.test_table import TableDisplay, ColourTableDisplay
+
+        module = TableDisplay(self)
+        self.plot_widget.addDock(module.dock, 'right', _module.dock)
+        self._modules.append(module)
+        _module = module
+
+        module = ColourTableDisplay(self)
+        self.plot_widget.addDock(module.dock, 'right', _module.dock)
         self._modules.append(module)
         _module = module
 

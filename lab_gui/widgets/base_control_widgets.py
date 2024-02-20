@@ -263,7 +263,7 @@ class SubControlWidget:
     
     It provides methods for passing re-size commmands to modules, which are any object that provides an update_values function
     '''
-    def __init__(self, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True):
+    def __init__(self, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True, make_frame=True):
 
         self.tick = 0
         self.updated = -10
@@ -271,8 +271,9 @@ class SubControlWidget:
 
         self._modules = []
         self.oldDPI = 0
-
-        self.makeFrame(menu_fn, help_fn, make_dock)
+        
+        if make_frame:
+            self.makeFrame(menu_fn, help_fn, make_dock)
 
     def makeFrame(self, menu_fn=None, help_fn=None, make_dock=True):
         self.frame = QFrame()
@@ -437,8 +438,8 @@ class FolderSelector:
         return self._layout
 
 class SaveModule(SubControlWidget):
-    def __init__(self, fixed_size=True, menu_fn=None, help_fn=None, make_dock=True):
-        super().__init__(fixed_size, menu_fn, help_fn, make_dock)
+    def __init__(self, **args):
+        super().__init__(**args)
         
         self._layout = QHBoxLayout()
 
