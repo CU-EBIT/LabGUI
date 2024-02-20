@@ -326,20 +326,20 @@ class DeviceReader(DeviceController):
         """Toggles log output of data, when this is enabled, a new logfile will be created"""
         self.do_log = self.log_button.isChecked()
         self.saver.on_changed(self.log_button)
-    
-    def make_log_file(self):
-        """Makes a new logfile to run with, here you can change the directory, etc, just ensure to
-        populate self.log_file_name with the filename."""
+
+    def get_log_file(self, value_name, init_dir=True):
+        """Makes a new logfile to run with, here you can change the directory, etc"""
         log_dir = self.saver.value_map["log_directory"]
         log_dir = f'{log_dir}/{self.name}/{time.strftime("%Y-%m-%d")}'
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        if self.data_key == "None":
-            self.data_key = None
-        
+        log_file_name = f'{log_dir}/{value_name}_{time.strftime("%H_%M_%S")}.log'
+        return log_file_name
+    
+    def make_log_file(self):
         name = self.name if self.data_key is None else self.data_key
         self.data_key_O = self.data_key
-        self.log_file_name = f'{log_dir}/{name}_{time.strftime("%H_%M_%S")}.log'
+        self.log_file_name = self.get_log_file(name)
         with open(self.log_file_name, 'w') as file:
             file.write(self.make_file_header())
         

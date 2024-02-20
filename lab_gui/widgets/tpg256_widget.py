@@ -1,4 +1,7 @@
 import serial
+import time
+import os
+
 from .device_widget import DeviceReader
 
 class TPG256(DeviceReader):
@@ -41,10 +44,12 @@ class TPG256(DeviceReader):
             self.read_cmd = f'PR{sensor}\r\n'.encode()
             self.read_multiple = False
         elif isinstance(sensor, list):
-            assert len(sensor) == len(key) and isinstance(key, list)
+            assert len(sensor) == len(data_key) and isinstance(data_key, list)
             self.read_multiple = True
             self.read_cmds = [f'PR{s}\r\n'.encode() for s in sensor]
-            self.data_keys = key
+            self.data_keys = data_key
+            self.do_log_m = False
+            self.log_files = {}
             
 
     def make_file_header(self):
@@ -69,6 +74,9 @@ class TPG256(DeviceReader):
         if self.device is None:
             return False, 0
         
+        if not self.do_log and len(self.log_files):
+            self.log_files = {}
+
         valid, value = True, 0
         if self.read_multiple:
             read_cmd = self.read_cmds[0]
@@ -107,8 +115,22 @@ class TPG256(DeviceReader):
                         print(f"Wrong Status? {response}")
                         _valid = False
                 if _valid:
+                    timestamp = time.time()
                     # And stuff them in the data server if valid
-                    self.client.set_float(key, float(response[1]))
+                    _value = float(response[1])
+                    self.client.set_float(key, _value)
+
+                    # And try to log them
+                    if self.do_log:
+                        if key in self.log_files:
+                            file_name = self.log_files[key]
+                        else:
+                            file_name = self.get_log_file(key)
+                            if not os.path.exists(file_name):
+                                file.write(self.make_file_header())
+                            self.log_files[key] = file_name
+                        with open(self.log_file_name, 'a') as file:
+                            file.write(self.format_values_for_print(timestamp, _value))
 
         else:
             self.device.write(self.read_cmd)     
