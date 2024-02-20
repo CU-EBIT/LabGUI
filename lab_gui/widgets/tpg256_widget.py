@@ -127,9 +127,10 @@ class TPG256(DeviceReader):
                         else:
                             file_name = self.get_log_file(key)
                             if not os.path.exists(file_name):
-                                file.write(self.make_file_header())
+                                with open(file_name, 'w') as file:
+                                    file.write(self.make_file_header())
                             self.log_files[key] = file_name
-                        with open(self.log_file_name, 'a') as file:
+                        with open(file_name, 'a') as file:
                             file.write(self.format_values_for_print(timestamp, _value))
 
         else:
