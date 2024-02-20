@@ -12,7 +12,7 @@ class TableDisplay(SubControlWidget):
         super().__init__(**args)
         self.client = parent.data_client
 
-        table = self.make_table()
+        self.table = self.make_table()
         
         self._layout = QVBoxLayout()
         self._layout.setSpacing(0)
@@ -20,12 +20,12 @@ class TableDisplay(SubControlWidget):
 
         holder = QHBoxLayout()
 
-        holder.addWidget(table)
+        holder.addWidget(self.table)
         holder.addStretch(1)
 
-        table.verticalHeader().setVisible(False)
+        self.table.verticalHeader().setVisible(False)
 
-        self._modules.append(table)
+        self._modules.append(self.table)
         self._layout.addLayout(holder)
         self._layout.addStretch(1)
         self.frame.setLayout(self._layout)
@@ -41,9 +41,25 @@ class TableDisplay(SubControlWidget):
         return table
 
     def frame_size(self):
-        self.resize(256, 120)
+        h = 0
+        w = 0
+        for i in range(self.table.rowCount()):
+            h += self.table.rowHeight(i)
+        for i in range(self.table.columnCount()):
+            w += self.table.columnWidth(i)
+        self.w = w
+        self.h = h
+        self.resize(w + 24, h + 47)
 
     def on_update(self):
+        h = 0
+        w = 0
+        for i in range(self.table.rowCount()):
+            h += self.table.rowHeight(i)
+        for i in range(self.table.columnCount()):
+            w += self.table.columnWidth(i)
+        if h != self.h or w != self.w:
+            self.frame_size()
         # We make the values ourself as this is a test.
 
         self.client.set_float("Pressure_HV_A", (1 + random.random()*0.05) * 1e-9)
@@ -159,7 +175,6 @@ class ColourTableDisplay(TableDisplay):
         self.colourers[f'2,1'] = ColourHelper.colour_uhv
         self.colourers[f'2,2'] = ColourHelper.colour_rv
 
-        self.table = table
         return table
     
     def update_values(self):
