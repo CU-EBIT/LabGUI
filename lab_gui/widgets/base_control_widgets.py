@@ -945,7 +945,7 @@ class ValuesAndPowerPolarity(ValuesAndPower):
         self._layout.addStretch(1)
 
 class TableDisplayWidget(QTableWidget):
-    def __init__(self, module, headers, rows, *args, **kwargs):
+    def __init__(self, module, headers, rows, auto_size=True, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = module.client
         self.headers = headers
@@ -953,6 +953,8 @@ class TableDisplayWidget(QTableWidget):
         self.init = True
         self.cells = {}
         self.clickable = True
+        self.auto_size = auto_size
+        self.padding = [2, 26]
         self.setColumnCount(len(headers))
         self.setRowCount(len(rows))
         self.update_values()
@@ -1008,6 +1010,14 @@ class TableDisplayWidget(QTableWidget):
             self.setEditTriggers(TableNoEdit)
             self.clearSelection()
         self.init = False
-        self.setHorizontalHeaderLabels(self.headers)
-        self.resizeColumnsToContents()
-        self.resizeRowsToContents()
+        if self.auto_size:
+            self.setHorizontalHeaderLabels(self.headers)
+            self.resizeColumnsToContents()
+            self.resizeRowsToContents()
+            h = 0
+            w = 0
+            for i in range(self.rowCount()):
+                h += self.rowHeight(i)
+            for i in range(self.columnCount()):
+                w += self.columnWidth(i)
+            self.resize(w+self.padding[0], h+self.padding[1])
