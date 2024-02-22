@@ -17,6 +17,10 @@ class TestDevice(DeviceReader):
         else:
             self.settings.title_fmt = f'Latest: {{:.3f}} ???'
 
+        # Add some options to the settings
+        self.settings.test_scale = 1.0
+        self.settings._names_["test_scale"] = "Test Scale"
+
     def make_file_header(self):
         # Adjust the header to indicate ???
         return "Local Time\tValue (???)\n"
@@ -38,7 +42,7 @@ class TestDevice(DeviceReader):
         var = random.random()
         # Sleep to emulate a read delay in the device
         time.sleep(0.05 + var * 1e-3)
-        return True, var
+        return True, var * self.settings.test_scale
 
     def close_device(self):
         if self.device is None:

@@ -40,7 +40,10 @@ class TPG256(DeviceReader):
         else:
             self.settings.title_fmt = f'Latest: {{:.3e}} mbar'
 
+        self.sensor = sensor
+        self.on = [0,0,0,0,0,0]
         if isinstance(sensor, int):
+            self.sensor = [sensor]
             self.read_cmd = f'PR{sensor}\r\n'.encode()
             self.read_multiple = False
         elif isinstance(sensor, list):
@@ -64,6 +67,17 @@ class TPG256(DeviceReader):
         try:
             self.device = serial.Serial(port=self.addr)
             self.valid = True
+            self.on = [1,1,1,1,1,1]
+            for sensor in self.sensor:
+                self.on[sensor-1] = 2
+            on_cmd = f'SEN'
+            for id in self.on:
+                on_cmd = on_cmd + f',{id}'
+            on_cmd = on_cmd + '\r\n'
+            self.device.write(on_cmd.encode())
+            self.device.readline()
+            self.device.write(b'\x05')
+            self.device.readline()
         except Exception as err:
             print(err)
             print(f"Failed to open {self.name}")
