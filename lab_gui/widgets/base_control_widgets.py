@@ -768,6 +768,11 @@ class SingleInputWidget(LineEdit):
 
     def get_dpi(self):
         return widget_dpi(self)
+    
+    def keyPressEvent(self, event):
+        # give 10s for user to press enter to confirm
+        self.init_done = time.time() + 10
+        return super().keyPressEvent(event)
         
     def set_label_sizes(self, size):
         size *= scale(self.get_dpi())
