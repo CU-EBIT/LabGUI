@@ -1,3 +1,42 @@
+def copy_driver_methods(driver, holder, allowed=lambda method:method != 'open_device' and method != 'close_device' and not method.startswith("_")):
+    object_methods = [method_name for method_name in dir(driver)
+                    if callable(getattr(driver, method_name))]
+    for method in object_methods:
+        if allowed(method):
+            setattr(holder, method, getattr(driver, method))
+
+class BaseDevice:
+
+    def __init__(self) -> None:
+        self.device = None
+
+    def open_device(self):
+        """
+        Handles opening the device to read. Here implementers should also handle any exceptions which may occur!
+
+        Returns:
+            bool: whether device opened
+        """
+        raise RuntimeWarning("Not implemented in base class")
+
+    def close_device(self):
+        """
+        Handles closing the device. Any exceptions thrown will be printed to console and otherwise ignored.
+        """
+        raise RuntimeWarning("Not implemented in base class")
+    
+    def write(self, cmd):
+        raise RuntimeWarning("Not implemented in base class")
+    
+    def query(self, cmd):
+        raise RuntimeWarning("Not implemented in base class")
+    
+    def read(self):
+        raise RuntimeWarning("Not implemented in base class")
+    
+    def read_raw(self):
+        raise RuntimeWarning("Not implemented in base class")
+
 class BaseSourceDevice:
     def is_output_enabled(self):
         """

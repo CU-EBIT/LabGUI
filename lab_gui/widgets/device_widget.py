@@ -7,12 +7,13 @@ import os
 from ..utils.qt_helper import *
 
 from ..widgets.base_control_widgets import SubControlWidget, FrameDock, StateSaver, addCrossHairs
+from .device_types.devices import BaseDevice
 from ..widgets.plot_widget import Plot, smooth_average
 
 # Change this if you want to change how many points are kept in memory.
 _max_points = 1e5
 
-class DeviceController(SubControlWidget):
+class DeviceController(SubControlWidget, BaseDevice):
     """
     Generic Device Controller template. This provides a thread to access the device on, as well as stub functions
     for opening and closing the device.
@@ -58,20 +59,6 @@ class DeviceController(SubControlWidget):
     def process_load_saved(self):
         """Process the loaded saved values, implementers should call super().process_load_saved()"""
         self.toggle_paused()
-
-    def open_device(self):
-        """
-        Handles opening the device to read. Here implementers should also handle any exceptions which may occur!
-
-        Returns whether the device opened.
-        """
-        return False
-
-    def close_device(self):
-        """
-        Handles closing the device. Any exceptions thrown will be printed to console and otherwise ignored.
-        """
-        pass
 
     def do_device_update(self):
         """

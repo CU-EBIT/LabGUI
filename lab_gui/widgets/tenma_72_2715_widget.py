@@ -1,16 +1,8 @@
-import time
-import serial
-
 from .device_widget import DeviceReader
-from .device_types.devices import BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource
+from .device_types.devices import BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource, copy_driver_methods
+from .drivers.tenma_72_2715 import TENMA722715 as Driver
 from .base_control_widgets import ControlButton, ControlLine, LineEdit, scale
 from ..utils.qt_helper import *
-
-# protocol found on https://www.farnell.com/datasheets/2578054.pdf
-#
-# This requires the 50ms sleeps between commands, otherwise bad things happen.
-# Testing shows that a 45ms sleep may also suffice, but not a 40 or lower.
-SLEEP_DUR = 0.05
 
 class TENMA722715(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource):
     def __init__(self, parent, addr, data_keys=[None, None]):
@@ -20,6 +12,7 @@ class TENMA722715(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVo
         self.output = False
         self.mutex = False
         self.data_keys = data_keys
+        self.device = Driver(addr)
 
         outer = QVBoxLayout()
         outer.setSpacing(0)
@@ -73,61 +66,14 @@ class TENMA722715(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVo
 
         self._layout.addStretch(0)
 
-    def set_voltage(self, V):
-        cmd = f'VSET1:{V:.2f}\n'.encode()
-        self.device.write(cmd)
-        time.sleep(SLEEP_DUR)
-
-    def set_current(self, I):
-        cmd = f'ISET1:{I:.2f}\n'.encode()
-        self.device.write(cmd)
-        time.sleep(SLEEP_DUR)
-
-    def is_output_enabled(self):
-        """This device is turned on by manual button, so this does nothing
-        """
-        return True
-    
-    def enable_output(self, output: bool):
-        """This device is turned on by manual button, so this does nothing
-        """
-        return output
-
-    def get_set_voltage(self):
-        cmd = b'VSET1?'
-        self.device.write(cmd)
-        time.sleep(SLEEP_DUR)
-        return float(self.device.read_all().decode().strip())
-
-    def get_set_current(self):
-        cmd = b'ISET1?'
-        self.device.write(cmd)
-        time.sleep(SLEEP_DUR)
-        return float(self.device.read_all().decode().strip())
-
-    def get_voltage(self):
-        cmd = b'VOUT1?'
-        self.device.write(cmd)
-        time.sleep(SLEEP_DUR)
-        return float(self.device.read_all().decode().strip())
-
-    def get_current(self):
-        cmd = b'IOUT1?'
-        self.device.write(cmd)
-        time.sleep(SLEEP_DUR)
-        return float(self.device.read_all().decode().strip())
-
-    def is_output_enabled(self):
-        """This device is turned on by manual button, so this does nothing
-
-        Returns:
-            bool: True, this is always on if present
-        """
-        return True
+        copy_driver_methods(self.device, self)
 
     def open_device(self):
+        opened = self.device.open_device()
+        self.valid = opened
+        if not opened:
+            return False
         try:
-            self.device = serial.Serial(self.addr)
             self.powerBtn.setChecked(self.is_output_enabled())
             self.powerBtn.isChecked()
             V = self.get_set_voltage()
@@ -137,18 +83,17 @@ class TENMA722715(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVo
             self.valid = True
         except Exception as err:
             print(err)
-            print('error opening PPS 2116A?')
-            self.device = None
-        return self.device != None
+            print('error opening TENMA 72-2715?')
+            self.valid = False
+        return self.valid
 
     def close_device(self):
-        if self.device is None:
-            return
-        self.device.close()
+        self.device.close_device()
+        self.valid = False
 
     def read_device(self):
 
-        if self.device is None:
+        if not self.valid:
             return False, 0
         
         self.is_output_enabled()

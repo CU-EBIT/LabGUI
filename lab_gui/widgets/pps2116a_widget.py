@@ -1,21 +1,16 @@
-import time
-import serial
-
 from .device_widget import DeviceReader
-from .device_types.devices import BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource
+from .drivers.pps2116a import PPS2116A as Driver
+from .device_types.devices import BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource, copy_driver_methods
 from .base_control_widgets import ControlButton, ControlLine, LineEdit, scale
 from ..utils.qt_helper import *
-
-# Based on https://github.com/circuit-specialists/PowerSupply_ElectronicLoad_Control/blob/master/PowerSupplies/pps2116a.py
 
 class PPS2116A(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource):
     def __init__(self, parent, addr, data_keys=[None, None]):
         super().__init__(parent, data_key=data_keys[0], name=f"PPS2116A", axis_title=f"Signal (V)")
-        self.addr = addr
-        self.channels = 1
-        self.output = False
-        self.mutex = False
+        
         self.data_keys = data_keys
+
+        self.device = Driver(addr)
 
         outer = QVBoxLayout()
         outer.setSpacing(0)
@@ -69,131 +64,34 @@ class PPS2116A(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVolta
 
         self._layout.addStretch(0)
 
-    def lock(self):
-        while(self.mutex):
-            pass
-        self.mutex = True
-
-    def unlock(self):
-        while(not self.mutex):
-            pass
-        self.mutex = False
-
-    def getChannels(self):
-        return self.channels
-
-    def is_output_enabled(self):
-        self.lock()
-        self.key = f'rs\n'
-        resp = self.writeFunction()
-        if resp == b'0000\n':
-            self.output = False
-        elif resp == b'0016\n' or resp == b'0001\n':
-            # b'0016\n' seems to be on and C.C
-            # b'0001\n' seems to be on and C.V
-            self.output = True
-        else:
-            self.output = True
-            print(f"New status?? {resp}")
-        self.unlock()
-        return self.output
-
-    def set_voltage(self, V):
-        V *= 100
-        V = int(V)
-        self.lock()
-        self.key = f'su{V:04d}\n'
-        self.writeFunction()
-        self.unlock()
-
-    def set_current(self, I):
-        I *= 1000
-        I = int(I)
-        self.lock()
-        self.key = f'si{I:04d}\n'
-        self.writeFunction()
-        self.unlock()
-
-    def writeFunction(self):
-        self.device.write(self.key.encode())
-        time.sleep(.02)
-        return self.device.read_all()
-
-    def enable_output(self, state):
-        self.output = state
-        if(state):
-            self.turnON()
-        else:
-            self.turnOFF()
-
-    def turnON(self):
-        self.lock()
-        self.key = "o1\n"
-        self.writeFunction()
-        self.unlock()
-
-    def turnOFF(self):
-        self.lock()
-        self.key = "o0\n"
-        self.writeFunction()
-        self.unlock()
-
-    def get_voltage(self):
-        self.lock()
-        self.key = "rv\n"
-        self.voltage = self.writeFunction().decode()
-        self.voltage = float(self.voltage) / 100.0
-        self.unlock()
-        return self.voltage
-
-    def get_current(self):
-        self.lock()
-        self.key = "ra\n"
-        self.amperage = self.writeFunction().decode()
-        self.amperage = float(self.amperage) / 1000.0
-        self.unlock()
-        return self.amperage
-    
-    def get_set_voltage(self):
-        self.lock()
-        self.key = "ru\n"
-        voltage = self.writeFunction().decode()
-        voltage = float(voltage) / 100.0
-        self.unlock()
-        return voltage
-
-    def get_set_current(self):
-        self.lock()
-        self.key = "ri\n"
-        amperage = self.writeFunction().decode()
-        amperage = float(amperage) / 1000.0
-        self.unlock()
-        return amperage
+        copy_driver_methods(self.device, self)
+        
+    def on_init(self):
+        return super().on_init()
 
     def open_device(self):
+        opened = self.device.open_device()
+        self.valid = opened
+        if not opened:
+            return False
         try:
-            self.device = serial.Serial(self.addr)
             self.powerBtn.setChecked(self.is_output_enabled())
             self.powerBtn.isChecked()
-
             self.V_out.box.setText(f'{self.get_set_voltage():.2f}')
             self.I_out.box.setText(f'{self.get_set_current():.3f}')
-
-            self.valid = True
         except Exception as err:
             print(err)
             print('error opening PPS 2116A?')
-            self.device = None
-        return self.device != None
+            self.valid = False
+        return self.valid
 
     def close_device(self):
-        if self.device is None:
-            return
-        self.device.close()
+        self.device.close_device()
+        self.valid = False
 
     def read_device(self):
 
-        if self.device is None:
+        if not self.valid:
             return False, 0
         
         self.is_output_enabled()
