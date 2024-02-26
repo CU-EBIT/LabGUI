@@ -2,6 +2,7 @@ import time
 import threading
 from math import ceil, floor
 import numpy
+from datetime import datetime
 
 import pyqtgraph as pg
 from pyqtgraph import AxisItem
@@ -653,8 +654,10 @@ class ClientWrapper:
 
     def set_value(self, key, value):
         self.set_client.init_connection()
+        __values__[key] = (datetime.now(), value)
         return self.set_client.set_value(key, value)
 
     def set_float(self, key, value):
         self.set_client.init_connection()
+        __values__[key] = (datetime.now(), value)
         return self.set_client.set_float(key, value)

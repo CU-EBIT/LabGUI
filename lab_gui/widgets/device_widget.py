@@ -209,7 +209,7 @@ class DeviceReader(DeviceController):
     ke617_widget: reading a GPIB device via pyvisa, also adds some extra controls
     sm7110_widget: reading a serial device via pyserial
 """
-    def __init__(self, parent, data_key=None, name="???", axis_title="???", plot_title="???", **args):
+    def __init__(self, parent, data_key=None, name="???", has_plot = True, axis_title="???", plot_title="???", **args):
         super().__init__(parent, name, menu_fn=self.open_settings, **args)
 
         self.log_file_name = None
@@ -230,25 +230,27 @@ class DeviceReader(DeviceController):
         self.log_button.setChecked(True)
         self.log_button.clicked.connect(self.toggle_log)
 
-        self.make_plot()
-        self.settings = self.plot_widget.settings
-        self.settings.y_axis_fmt = '{:.3f}'
-        if plot_title != '???':
-            self.settings.title_fmt = plot_title
-        self.settings.axis_name = axis_title
+        self.has_plot = has_plot
+        if has_plot:
+            self.make_plot()
+            self.settings = self.plot_widget.settings
+            self.settings.y_axis_fmt = '{:.3f}'
+            if plot_title != '???':
+                self.settings.title_fmt = plot_title
+            self.settings.axis_name = axis_title
 
-        self.plot_data = [self.times, self.values, self.avgs, False, 0]
+            self.plot_data = [self.times, self.values, self.avgs, False, 0]
 
-        self.plot_update_backup = self.plot_widget.update_values
-        self.plot_get_data_backup = self.plot_widget.get_data
+            self.plot_update_backup = self.plot_widget.update_values
+            self.plot_get_data_backup = self.plot_widget.get_data
 
-        self.set_data_key(data_key)
+            self.set_data_key(data_key)
 
-        self.plot_widget.setup()
-        self.plot_widget.start()
+            self.plot_widget.setup()
+            self.plot_widget.start()
 
-        self.plot_dock = FrameDock(widget=self.plot_widget,menu_fn=self.open_settings,help_fn=None)
-        self.plot_dock.label.setText(name)
+            self.plot_dock = FrameDock(widget=self.plot_widget,menu_fn=self.open_settings,help_fn=None)
+            self.plot_dock.label.setText(name)
 
         self.full_layout = QVBoxLayout()
         self._layout = QHBoxLayout()
@@ -259,8 +261,9 @@ class DeviceReader(DeviceController):
         self.makeFrame(menu_fn=self.open_settings)
         self.frame.setLayout(self.full_layout)
         self.full_layout.addLayout(self._layout)
-        self.full_layout.addWidget(self.plot_widget)
-        self.full_layout.addWidget(addCrossHairs(self.plot_widget.plot_widget))
+        if has_plot:
+            self.full_layout.addWidget(self.plot_widget)
+            self.full_layout.addWidget(addCrossHairs(self.plot_widget.plot_widget))
 
     def make_plot(self):
         """This makes the plot_widget, implementers can add custom arguments to their plot, etc by replacing this function
@@ -272,6 +275,9 @@ class DeviceReader(DeviceController):
         Initialises the various settings for the plot
         """
         self.data_key = data_key
+        
+        if not self.has_plot:
+            return
 
         if 'reload_hours' in self.settings._names_:
             del self.settings._names_['reload_hours']
@@ -362,31 +368,31 @@ class DeviceReader(DeviceController):
         self.valid, self.value = self.read_device()
         if self.valid:
             timestamp = time.time()
+            if self.has_plot:
+                times = self.plot_data[0]
+                values = self.plot_data[1]
+                avgs = self.plot_data[2]
+                existing = self.plot_data[3]
+                plots = self.plot_data
 
-            times = self.plot_data[0]
-            values = self.plot_data[1]
-            avgs = self.plot_data[2]
-            existing = self.plot_data[3]
-            plots = self.plot_data
-
-            if not existing: # First time we back-fill the arrays with initial value
-                times = numpy.full(int(_max_points), timestamp)
-                values = numpy.full(int(_max_points), self.value)
-                avgs = smooth_average(values)
-                plots[3] = True
-                plots[4] = 0 # clear rolled status
-            else: # Otherwise we roll back the arrays, and append the new value to the end
-                times = numpy.roll(times,-1)
-                times[-1] = timestamp
-                values = numpy.roll(values,-1)
-                avgs = numpy.roll(avgs,-1)
-                values[-1] = self.value
-                plots[4] = plots[4] + 1 # Increment rolled status
-            # Finally update the arrays
-            avgs[-100:] = smooth_average(values[-200:])[-100:]
-            plots[0] = times
-            plots[1] = values
-            plots[2] = avgs
+                if not existing: # First time we back-fill the arrays with initial value
+                    times = numpy.full(int(_max_points), timestamp)
+                    values = numpy.full(int(_max_points), self.value)
+                    avgs = smooth_average(values)
+                    plots[3] = True
+                    plots[4] = 0 # clear rolled status
+                else: # Otherwise we roll back the arrays, and append the new value to the end
+                    times = numpy.roll(times,-1)
+                    times[-1] = timestamp
+                    values = numpy.roll(values,-1)
+                    avgs = numpy.roll(avgs,-1)
+                    values[-1] = self.value
+                    plots[4] = plots[4] + 1 # Increment rolled status
+                # Finally update the arrays
+                avgs[-100:] = smooth_average(values[-200:])[-100:]
+                plots[0] = times
+                plots[1] = values
+                plots[2] = avgs
 
             if not self.custom_logging:
                 if self.do_log != self.do_log_O or self.data_key != self.data_key_O:
