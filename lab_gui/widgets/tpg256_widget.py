@@ -86,7 +86,6 @@ class TPG256(DeviceReader):
                 key = getattr(self.settings, f"sensor_key_{i}")
                 cmd = f'PR{i}\r\n'.encode()
                 self.sensors[i] = [on, cmd, key]
-            print("Updated sensors: ", self.sensors)
             self.needs_init = True
             self.read_lock = False
         
@@ -183,7 +182,6 @@ class TPG256(DeviceReader):
         # Now read the remainder
         for channel in self.sensors.keys():
             _valid, _value, timestamp = self.read_channel(channel)
-            print(channel, _valid, _value)
             _, _, key = self.sensors[channel]
             if _valid and key is not None:
                 read_values[channel - 1] = (timestamp, _value, key)
