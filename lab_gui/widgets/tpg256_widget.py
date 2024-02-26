@@ -30,6 +30,9 @@ class TPG256(DeviceReader):
         super().__init__(parent, key, name=f"Pressure Gauge", axis_title=f"Pressure Gauge (mbar)")
         self.addr = addr
 
+        # We manage our own logging, as we do multiple sensors
+        self.custom_logging = True
+
         # Update settings scales so that the pA title is correct
         self.settings.log_scale = False
         self.settings.scale = 1
@@ -44,8 +47,10 @@ class TPG256(DeviceReader):
         self.on = [0,0,0,0,0,0]
         if isinstance(sensor, int):
             self.sensor = [sensor]
-            self.read_cmd = f'PR{sensor}\r\n'.encode()
+            read_cmd = f'PR{sensor}\r\n'.encode()
+            self.read_cmds[read_cmd]
             self.read_multiple = False
+            self.data_keys = [data_key]
         elif isinstance(sensor, list):
             assert len(sensor) == len(data_key) and isinstance(data_key, list)
             self.read_multiple = True
@@ -91,75 +96,91 @@ class TPG256(DeviceReader):
         if not self.do_log and len(self.log_files):
             self.log_files = {}
 
+        read_values = [None for _ in self.read_cmds]
+
         valid, value = True, 0
-        if self.read_multiple:
-            read_cmd = self.read_cmds[0]
-            # First read the "main" sensor
-            self.device.write(read_cmd)     
-            response = self.device.readline()
-            if response != b'\x06\r\n':
-                print(f"Failed response? {response}")
-                valid = False
-            if valid:
-                self.device.write(b'\x05')
-                response = self.device.readline().decode().strip().split(',')
-                status = response[0]
-                if status != '0':
-                    print(f"Wrong Status? {response}")
-                    valid = False
-            if valid:
-                value = float(response[1])
-            
-            # Now read the remainder
-            for i in range(1, len(self.read_cmds)):
-                read_cmd = self.read_cmds[i]
-                key = self.data_keys[i]
-                # First read the "main" sensor
-                _valid = True
-                self.device.write(read_cmd)     
-                response = self.device.readline()
-                if response != b'\x06\r\n':
-                    print(f"Failed response? {response}")
-                    _valid = False
-                if _valid:
-                    self.device.write(b'\x05')
-                    response = self.device.readline().decode().strip().split(',')
-                    status = response[0]
-                    if status != '0':
-                        print(f"Wrong Status? {response}")
-                        _valid = False
-                if _valid:
-                    timestamp = time.time()
-                    # And stuff them in the data server if valid
-                    _value = float(response[1])
-                    self.client.set_float(key, _value)
 
-                    # And try to log them
-                    if self.do_log:
-                        if key in self.log_files:
-                            file_name = self.log_files[key]
-                        else:
-                            file_name = self.get_log_file(key)
-                            if not os.path.exists(file_name):
-                                with open(file_name, 'w') as file:
-                                    file.write(self.make_file_header())
-                            self.log_files[key] = file_name
-                        with open(file_name, 'a') as file:
-                            file.write(self.format_values_for_print(timestamp, _value))
-
-        else:
-            self.device.write(self.read_cmd)     
-            response = self.device.readline()
-            if response != b'\x06\r\n':
-                print(f"Failed response? {response}")
-                return False, 1e30
+        read_cmd = self.read_cmds[0]
+        # First read the "main" sensor
+        self.device.write(read_cmd)     
+        response = self.device.readline()
+        if response != b'\x06\r\n':
+            print(f"Failed response? {response}")
+            valid = False
+        if valid:
             self.device.write(b'\x05')
             response = self.device.readline().decode().strip().split(',')
             status = response[0]
             if status != '0':
                 print(f"Wrong Status? {response}")
-                return False, 1e30
+                valid = False
+        if valid:
             value = float(response[1])
+            timestamp = time.time()
+            key = self.data_keys[i]
+            if key is not None:
+                read_values[i] = (timestamp, value, key)
+                self.client.set_float(key, value)
+        
+        # Now read the remainder
+        for i in range(1, len(self.read_cmds)):
+            read_cmd = self.read_cmds[i]
+            key = self.data_keys[i]
+            # First read the "main" sensor
+            _valid = True
+            self.device.write(read_cmd)     
+            response = self.device.readline()
+            if response != b'\x06\r\n':
+                print(f"Failed response? {response}")
+                _valid = False
+            if _valid:
+                self.device.write(b'\x05')
+                response = self.device.readline().decode().strip().split(',')
+                status = response[0]
+                if status != '0':
+                    print(f"Wrong Status? {response}")
+                    _valid = False
+            if _valid:
+                timestamp = time.time()
+                # And stuff them in the data server if valid
+                _value = float(response[1])
+                read_values[i] = (timestamp, _value, key)
+                self.client.set_float(key, _value)
+
+                # And try to log them
+                if self.do_log:
+                    if key in self.log_files:
+                        file_name = self.log_files[key]
+                    else:
+                        file_name = self.get_log_file(key)
+                        if not os.path.exists(file_name):
+                            with open(file_name, 'w') as file:
+                                file.write(self.make_file_header())
+                        self.log_files[key] = file_name
+                    with open(file_name, 'a') as file:
+                        file.write(self.format_values_for_print(timestamp, _value))
+        
+        # Now check if we need to log things
+        if self.do_log:
+            for i in range(len(read_values)):
+                if read_values[i] is None:
+                    continue
+                timestamp, value, key = read_values[i]
+
+                # Check if we have the file, if not we will make it
+                if key in self.log_files:
+                    file_name = self.log_files[key]
+                else:
+                    file_name = self.get_log_file(key)
+                    if not os.path.exists(file_name):
+                        with open(file_name, 'w') as file:
+                            file.write(self.make_file_header())
+                    self.log_files[key] = file_name
+
+                # Finally append the line to the log
+                with open(file_name, 'a') as file:
+                    file.write(self.format_values_for_print(timestamp, _value))
+
         return valid, value
 
     def close_device(self):
