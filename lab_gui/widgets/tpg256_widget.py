@@ -3,6 +3,7 @@ import time
 import os
 
 from .device_widget import DeviceReader
+from .plot_widget import Settings
 
 class TPG256(DeviceReader):
     '''DeviceReader for reading from a TPG 256 gauge controller.
@@ -27,11 +28,13 @@ class TPG256(DeviceReader):
         key = data_key
         if isinstance(key, list): 
             key = key[0]
-        super().__init__(parent, key, name=f"Pressure Gauge", axis_title=f"Pressure Gauge (mbar)")
+        super().__init__(parent, key, name=f"Pressure Gauge", has_plot=False, axis_title=f"Pressure Gauge (mbar)")
         self.addr = addr
 
         # We manage our own logging, as we do multiple sensors
         self.custom_logging = True
+
+        self.settings = Settings()
 
         # Update settings scales so that the pA title is correct
         self.settings.log_scale = False
@@ -45,20 +48,56 @@ class TPG256(DeviceReader):
 
         self.sensor = sensor
         self.on = [0,0,0,0,0,0]
+        self.sensors = {}
         if isinstance(sensor, int):
             self.sensor = [sensor]
-            read_cmd = f'PR{sensor}\r\n'.encode()
-            self.read_cmds[read_cmd]
-            self.read_multiple = False
-            self.data_keys = [data_key]
+            self.data_keys = {sensor:data_key}
         elif isinstance(sensor, list):
             assert len(sensor) == len(data_key) and isinstance(data_key, list)
-            self.read_multiple = True
-            self.read_cmds = [f'PR{s}\r\n'.encode() for s in sensor]
-            self.data_keys = data_key
-            self.do_log_m = False
-            self.log_files = {}
-            
+            self.data_keys = {sensor[i]:data_key[i] for i in range(len(sensor))}
+
+        self.log_files = {}
+        self.do_log_m = False
+        
+        for i in range(len(self.sensor)):
+            sensor = self.sensor[i]
+            cmd = f'PR{sensor}\r\n'.encode()
+            key = self.data_keys[sensor]
+            self.sensors[sensor] = [True, cmd, key]
+        
+        for i in range(1, len(self.on) + 1):
+            if not i in self.sensors:
+                cmd = f'PR{i}\r\n'.encode()
+                self.sensors[i] = [False, cmd, None]
+            on, _, key = self.sensors[i]
+            setattr(self.settings, f'sensor_on_{i}', on)
+            setattr(self.settings, f"sensor_key_{i}", "" if key is None else key)
+
+            self.settings._names_[f'sensor_on_{i}'] = f"Sensor {i}: "
+            self.settings._names_[f'sensor_key_{i}'] = f"Key {i}: "
+
+        def on_changed(*_):
+            while self.read_lock:
+                time.sleep(0.001)
+            self.read_lock = True
+            for i in range(1, len(self.on) + 1):
+                on, _, key = self.sensors[i]
+                on = getattr(self.settings, f'sensor_on_{i}')
+                key = getattr(self.settings, f"sensor_key_{i}")
+                cmd = f'PR{i}\r\n'.encode()
+                self.sensors[i] = [on, cmd, key]
+            print("Updated sensors: ", self.sensors)
+            self.needs_init = True
+            self.read_lock = False
+        
+        self.read_lock = False
+        self.needs_init = True
+
+        self.settings._callback = on_changed
+
+    def process_load_saved(self):
+        super().process_load_saved()
+        self.settings._callback()
 
     def make_file_header(self):
         # Adjust the header to indicate amps
@@ -68,41 +107,44 @@ class TPG256(DeviceReader):
         # We read only every 300ms or so, so .2f is plenty of resolution on the timestamp
         return f"{timestamp:.2f}\t{value:.3e}\n"
     
+    def init_sensors(self):
+        if self.device is None:
+            self.open_device()
+        if self.device is None:
+            print("Error, TPG 256 device not open, cannot init sensors")
+            return
+        self.needs_init = False
+        self.on = [1,1,1,1,1,1]
+        for i in range(len(self.on)):
+            on, _, _ = self.sensors[i + 1]
+            self.on[i] = 2 if on else 1
+        on_cmd = f'SEN'
+        for id in self.on:
+            on_cmd = on_cmd + f',{id}'
+        on_cmd = on_cmd + '\r\n'
+        self.device.write(on_cmd.encode())
+        self.device.readline()
+        self.device.write(b'\x05')
+        self.device.readline()
+
     def open_device(self):
         try:
             self.device = serial.Serial(port=self.addr)
             self.valid = True
-            self.on = [1,1,1,1,1,1]
-            for sensor in self.sensor:
-                self.on[sensor-1] = 2
-            on_cmd = f'SEN'
-            for id in self.on:
-                on_cmd = on_cmd + f',{id}'
-            on_cmd = on_cmd + '\r\n'
-            self.device.write(on_cmd.encode())
-            self.device.readline()
-            self.device.write(b'\x05')
-            self.device.readline()
         except Exception as err:
             print(err)
             print(f"Failed to open {self.name}")
             self.device = None
         return self.device != None
 
-    def read_device(self):
-        if self.device is None:
-            return False, 0
+    def read_channel(self, channel):
+        valid, value, timestamp = True, 0, 0
+
+        on, cmd, key = self.sensors[channel]
+        if not on:
+            return False, 0, 0
         
-        if not self.do_log and len(self.log_files):
-            self.log_files = {}
-
-        read_values = [None for _ in self.read_cmds]
-
-        valid, value = True, 0
-
-        read_cmd = self.read_cmds[0]
-        # First read the "main" sensor
-        self.device.write(read_cmd)     
+        self.device.write(cmd)     
         response = self.device.readline()
         if response != b'\x06\r\n':
             print(f"Failed response? {response}")
@@ -117,55 +159,45 @@ class TPG256(DeviceReader):
         if valid:
             value = float(response[1])
             timestamp = time.time()
-            key = self.data_keys[i]
             if key is not None:
-                read_values[i] = (timestamp, value, key)
                 self.client.set_float(key, value)
-        
-        # Now read the remainder
-        for i in range(1, len(self.read_cmds)):
-            read_cmd = self.read_cmds[i]
-            key = self.data_keys[i]
-            # First read the "main" sensor
-            _valid = True
-            self.device.write(read_cmd)     
-            response = self.device.readline()
-            if response != b'\x06\r\n':
-                print(f"Failed response? {response}")
-                _valid = False
-            if _valid:
-                self.device.write(b'\x05')
-                response = self.device.readline().decode().strip().split(',')
-                status = response[0]
-                if status != '0':
-                    print(f"Wrong Status? {response}")
-                    _valid = False
-            if _valid:
-                timestamp = time.time()
-                # And stuff them in the data server if valid
-                _value = float(response[1])
-                read_values[i] = (timestamp, _value, key)
-                self.client.set_float(key, _value)
+        return valid, value, timestamp
 
-                # And try to log them
-                if self.do_log:
-                    if key in self.log_files:
-                        file_name = self.log_files[key]
-                    else:
-                        file_name = self.get_log_file(key)
-                        if not os.path.exists(file_name):
-                            with open(file_name, 'w') as file:
-                                file.write(self.make_file_header())
-                        self.log_files[key] = file_name
-                    with open(file_name, 'a') as file:
-                        file.write(self.format_values_for_print(timestamp, _value))
+    def read_device(self):
+        if self.device is None:
+            return False, 0
+        
+        if not self.do_log and len(self.log_files):
+            self.log_files = {}
+
+        while self.read_lock:
+            time.sleep(0.001)
+        self.read_lock = True
+
+        if self.needs_init:
+            self.init_sensors()
+
+        read_values = [None for _ in self.sensors]
+
+        first_channel = True
+        # Now read the remainder
+        for channel in self.sensors.keys():
+            _valid, _value, timestamp = self.read_channel(channel)
+            print(channel, _valid, _value)
+            _, _, key = self.sensors[channel]
+            if _valid and key is not None:
+                read_values[channel - 1] = (timestamp, _value, key)
+            if first_channel:
+                first_channel = False
+                valid, value, timestamp = _valid, _value, timestamp
+        self.read_lock = False
         
         # Now check if we need to log things
         if self.do_log:
             for i in range(len(read_values)):
                 if read_values[i] is None:
                     continue
-                timestamp, value, key = read_values[i]
+                timestamp, _value, key = read_values[i]
 
                 # Check if we have the file, if not we will make it
                 if key in self.log_files:
