@@ -251,9 +251,9 @@ class Settings(BaseSettings):
         def opt_changed(*_):
             '''Updates things when the dropdown list is changed'''
             chosen = self._entries_['source_key'].get_value()
+            self.source_key = chosen
+            self._default_option = self.source_key
             if chosen in self._option_defaults_:
-                self.source_key = chosen
-                self._default_option = self.source_key
                 defs = self._option_defaults_[chosen]
                 self.axis_name = defs[0]
                 self.scale = defs[1]
@@ -385,6 +385,7 @@ class Settings(BaseSettings):
         for key in values.keys():
             if hasattr(self, key) and key in self._names_:
                 setattr(self, key, values[key])
+        self._default_option = self.source_key
 
 plot_colours = [(245,102,0), (185,71,0), (84,98,35), (239,219,178)]
 avgs_colours = [(82,45,128), (46,26,71), (0,32,91), (0,94,184)]
