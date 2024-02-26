@@ -216,6 +216,9 @@ class DeviceReader(DeviceController):
         self.value = 0
         self.valid = False
 
+        # If set to true, we will not manage logging from the log_button. This also affects whether the value goes to the data_client
+        self.custom_logging = False
+
         # Pre-populate array with the start values
         self.times = numpy.full(int(_max_points), time.time())
         self.values = numpy.full(int(_max_points), self.value)
@@ -385,14 +388,15 @@ class DeviceReader(DeviceController):
             plots[1] = values
             plots[2] = avgs
 
-            if self.do_log != self.do_log_O or self.data_key != self.data_key_O:
-                if self.do_log and self.name != "???":
-                    self.make_log_file()
-                else:
-                    self.do_log = False
-                self.do_log_O = self.do_log
-            if self.data_key is not None:
-                self.client.set_float(self.data_key, self.value)
-            if self.do_log:
-                with open(self.log_file_name, 'a') as file:
-                    file.write(self.format_values_for_print(timestamp, self.value))
+            if not self.custom_logging:
+                if self.do_log != self.do_log_O or self.data_key != self.data_key_O:
+                    if self.do_log and self.name != "???":
+                        self.make_log_file()
+                    else:
+                        self.do_log = False
+                    self.do_log_O = self.do_log
+                if self.data_key is not None:
+                    self.client.set_float(self.data_key, self.value)
+                if self.do_log:
+                    with open(self.log_file_name, 'a') as file:
+                        file.write(self.format_values_for_print(timestamp, self.value))

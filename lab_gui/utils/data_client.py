@@ -2,6 +2,7 @@ import socket
 from datetime import datetime
 import pickle
 import struct
+import time
 
 # Adds prints if things go wrong
 DEBUG = False
@@ -250,12 +251,19 @@ class BaseDataClient:
         self.init_connection()
         self.addr = (self.addr[0], port)
 
-    def init_connection(self):
+    def init_connection(self, depth=0):
         '''Starts a new connection, closes existing one if present.'''
         if self.connection is not None:
             self.close()
         self.connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        self.connection.settimeout(0.1)
+        if self.connection is not None:
+            self.connection.settimeout(0.1)
+        else:
+            if depth > 10:
+                print("Error initing connection, tried too many times")
+                return
+            time.sleep(0.01)
+            self.init_connection(depth+1)
 
     def close(self):
         if self.connection is not None:
