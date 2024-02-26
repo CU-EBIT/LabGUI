@@ -1,0 +1,11 @@
+# Core requirements
+PyQt6
+numpy
+pyqtgraph
+
+# The below depend on the modules used
+pyvisa
+pyserial
+scipy
+nidaqmx
+matplotlib
