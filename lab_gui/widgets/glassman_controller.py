@@ -5,9 +5,10 @@ from ..utils.qt_helper import *
 
 from .device_widget import DeviceController
 from .drivers.glassman_controller import GlassmanController
+from .device_types.devices import BasicVoltageSource
 from .base_control_widgets import ControlLine, LineEdit, scale
 
-class DualGlassman(DeviceController):
+class DualGlassman(DeviceController, BasicVoltageSource):
     """
     This controls 2 analog glassman power supplies, a 3kV and a 5kV one, using a usb NIDAQ
     """
@@ -177,3 +178,27 @@ class DualGlassman(DeviceController):
         self.O3kV_O = self.O3kV
         self.O3kV = self.hv_3kV_button.isChecked()
         self.saver.on_changed(self.hv_3kV_button)
+
+    def set_voltage(self, voltage:float, channel:int):
+        if channel == 0:
+            self.set_voltage_5kV(voltage)
+        elif channel == 1:
+            self.set_voltage_3kV(voltage)
+
+    def is_output_enabled(self, channel:int):
+        if channel == 0:
+            return self.O5kV
+        elif channel == 1:
+            return self.O3kV
+        
+    def toggle_output(self, channel:int):
+        if channel == 0:
+            self.toggle_HV_5kV()
+        elif channel == 1:
+            self.toggle_HV_3kV()
+
+    def get_set_voltage(self, channel:int):
+        if channel == 0:
+            return self.V5kV
+        elif channel == 1:
+            return self.V3kV

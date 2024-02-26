@@ -2,6 +2,7 @@ import time
 import serial
 
 from .device_widget import DeviceReader
+from .device_types.devices import BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource
 from .base_control_widgets import ControlButton, ControlLine, LineEdit, scale
 from ..utils.qt_helper import *
 
@@ -11,7 +12,7 @@ from ..utils.qt_helper import *
 # Testing shows that a 45ms sleep may also suffice, but not a 40 or lower.
 SLEEP_DUR = 0.05
 
-class TENMA722715(DeviceReader):
+class TENMA722715(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource):
     def __init__(self, parent, addr, data_keys=[None, None]):
         super().__init__(parent, data_key=data_keys[0], name=f"TENMA-72-2715", axis_title=f"Signal (V)")
         self.addr = addr
@@ -34,12 +35,12 @@ class TENMA722715(DeviceReader):
         def update_current(*_):
             value = self.I_out.get_value()
             def do_update():
-                self.set_I(value)
+                self.set_current(value)
             self.queue_cmd(do_update)
         def update_voltage(*_):
             value = self.V_out.get_value()
             def do_update():
-                self.set_V(value)
+                self.set_voltage(value)
             self.queue_cmd(do_update)
 
         self.V_out = ControlLine(update_voltage, LineEdit("15.00"), "{:.2f}", 0, 32)
@@ -72,46 +73,51 @@ class TENMA722715(DeviceReader):
 
         self._layout.addStretch(0)
 
-    def set_V(self, V):
+    def set_voltage(self, V):
         cmd = f'VSET1:{V:.2f}\n'.encode()
         self.device.write(cmd)
         time.sleep(SLEEP_DUR)
 
-    def set_I(self, I):
+    def set_current(self, I):
         cmd = f'ISET1:{I:.2f}\n'.encode()
         self.device.write(cmd)
         time.sleep(SLEEP_DUR)
 
-    def toggle_output(self):
+    def is_output_enabled(self):
         """This device is turned on by manual button, so this does nothing
         """
-        pass
+        return True
+    
+    def enable_output(self, output: bool):
+        """This device is turned on by manual button, so this does nothing
+        """
+        return output
 
-    def get_VSet(self):
+    def get_set_voltage(self):
         cmd = b'VSET1?'
         self.device.write(cmd)
         time.sleep(SLEEP_DUR)
         return float(self.device.read_all().decode().strip())
 
-    def get_ISet(self):
+    def get_set_current(self):
         cmd = b'ISET1?'
         self.device.write(cmd)
         time.sleep(SLEEP_DUR)
         return float(self.device.read_all().decode().strip())
 
-    def get_VOut(self):
+    def get_voltage(self):
         cmd = b'VOUT1?'
         self.device.write(cmd)
         time.sleep(SLEEP_DUR)
         return float(self.device.read_all().decode().strip())
 
-    def get_IOut(self):
+    def get_current(self):
         cmd = b'IOUT1?'
         self.device.write(cmd)
         time.sleep(SLEEP_DUR)
         return float(self.device.read_all().decode().strip())
 
-    def get_output(self):
+    def is_output_enabled(self):
         """This device is turned on by manual button, so this does nothing
 
         Returns:
@@ -122,10 +128,10 @@ class TENMA722715(DeviceReader):
     def open_device(self):
         try:
             self.device = serial.Serial(self.addr)
-            self.powerBtn.setChecked(self.get_output())
+            self.powerBtn.setChecked(self.is_output_enabled())
             self.powerBtn.isChecked()
-            V = self.get_VSet()
-            I = self.get_ISet()
+            V = self.get_set_voltage()
+            I = self.get_set_current()
             self.V_out.box.setText(f'{V:.2f}')
             self.I_out.box.setText(f'{I:.3f}')
             self.valid = True
@@ -145,10 +151,10 @@ class TENMA722715(DeviceReader):
         if self.device is None:
             return False, 0
         
-        self.get_output()
-        V = self.get_VOut()
+        self.is_output_enabled()
+        V = self.get_voltage()
         if self.data_keys[1] != None:
-            I = self.get_IOut()
+            I = self.get_current()
             self.client.set_float(self.data_keys[1], I)
 
         return True, V

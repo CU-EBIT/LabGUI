@@ -2,12 +2,13 @@ import time
 import serial
 
 from .device_widget import DeviceReader
+from .device_types.devices import BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource
 from .base_control_widgets import ControlButton, ControlLine, LineEdit, scale
 from ..utils.qt_helper import *
 
 # Based on https://github.com/circuit-specialists/PowerSupply_ElectronicLoad_Control/blob/master/PowerSupplies/pps2116a.py
 
-class PPS2116A(DeviceReader):
+class PPS2116A(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, BasicVoltageMeasure, BasicVoltageSource):
     def __init__(self, parent, addr, data_keys=[None, None]):
         super().__init__(parent, data_key=data_keys[0], name=f"PPS2116A", axis_title=f"Signal (V)")
         self.addr = addr
@@ -19,7 +20,7 @@ class PPS2116A(DeviceReader):
         outer = QVBoxLayout()
         outer.setSpacing(0)
 
-        self.powerBtn = ControlButton(toggle=self.toggleOutput)
+        self.powerBtn = ControlButton(toggle=self.toggle_output)
         self.powerBtn.setFixedWidth(125)
         outer.addWidget(self.powerBtn)
         self._modules.append(self.powerBtn)
@@ -30,12 +31,12 @@ class PPS2116A(DeviceReader):
         def update_current(*_):
             value = self.I_out.get_value()
             def do_update():
-                self.set_I(value)
+                self.set_current(value)
             self.queue_cmd(do_update)
         def update_voltage(*_):
             value = self.V_out.get_value()
             def do_update():
-                self.set_V(value)
+                self.set_voltage(value)
             self.queue_cmd(do_update)
 
         self.V_out = ControlLine(update_voltage, LineEdit("15.00"), "{:.2f}", 0, 32)
@@ -81,7 +82,7 @@ class PPS2116A(DeviceReader):
     def getChannels(self):
         return self.channels
 
-    def getOutput(self):
+    def is_output_enabled(self):
         self.lock()
         self.key = f'rs\n'
         resp = self.writeFunction()
@@ -97,7 +98,7 @@ class PPS2116A(DeviceReader):
         self.unlock()
         return self.output
 
-    def set_V(self, V):
+    def set_voltage(self, V):
         V *= 100
         V = int(V)
         self.lock()
@@ -105,7 +106,7 @@ class PPS2116A(DeviceReader):
         self.writeFunction()
         self.unlock()
 
-    def set_I(self, I):
+    def set_current(self, I):
         I *= 1000
         I = int(I)
         self.lock()
@@ -118,11 +119,7 @@ class PPS2116A(DeviceReader):
         time.sleep(.02)
         return self.device.read_all()
 
-    def toggleOutput(self):
-        state = not self.getOutput()
-        self.setOutput(state)
-
-    def setOutput(self, state):
+    def enable_output(self, state):
         self.output = state
         if(state):
             self.turnON()
@@ -141,7 +138,7 @@ class PPS2116A(DeviceReader):
         self.writeFunction()
         self.unlock()
 
-    def measureVoltage(self):
+    def get_voltage(self):
         self.lock()
         self.key = "rv\n"
         self.voltage = self.writeFunction().decode()
@@ -149,7 +146,7 @@ class PPS2116A(DeviceReader):
         self.unlock()
         return self.voltage
 
-    def measureAmperage(self):
+    def get_current(self):
         self.lock()
         self.key = "ra\n"
         self.amperage = self.writeFunction().decode()
@@ -157,7 +154,7 @@ class PPS2116A(DeviceReader):
         self.unlock()
         return self.amperage
     
-    def presetVoltage(self):
+    def get_set_voltage(self):
         self.lock()
         self.key = "ru\n"
         voltage = self.writeFunction().decode()
@@ -165,7 +162,7 @@ class PPS2116A(DeviceReader):
         self.unlock()
         return voltage
 
-    def presetCurrent(self):
+    def get_set_current(self):
         self.lock()
         self.key = "ri\n"
         amperage = self.writeFunction().decode()
@@ -176,11 +173,11 @@ class PPS2116A(DeviceReader):
     def open_device(self):
         try:
             self.device = serial.Serial(self.addr)
-            self.powerBtn.setChecked(self.getOutput())
+            self.powerBtn.setChecked(self.is_output_enabled())
             self.powerBtn.isChecked()
 
-            self.V_out.box.setText(f'{self.presetVoltage():.2f}')
-            self.I_out.box.setText(f'{self.presetCurrent():.3f}')
+            self.V_out.box.setText(f'{self.get_set_voltage():.2f}')
+            self.I_out.box.setText(f'{self.get_set_current():.3f}')
 
             self.valid = True
         except Exception as err:
@@ -199,10 +196,10 @@ class PPS2116A(DeviceReader):
         if self.device is None:
             return False, 0
         
-        self.getOutput()
-        V = self.measureVoltage()
+        self.is_output_enabled()
+        V = self.get_voltage()
         if self.data_keys[1] != None:
-            I = self.measureAmperage()
+            I = self.get_current()
             self.client.set_float(self.data_keys[1], I)
 
         return True, V
