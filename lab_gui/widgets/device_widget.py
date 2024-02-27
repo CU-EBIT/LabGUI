@@ -7,12 +7,13 @@ import os
 from ..utils.qt_helper import *
 
 from ..widgets.base_control_widgets import SubControlWidget, FrameDock, StateSaver, addCrossHairs
-from ..widgets.plot_widget import Plot, smooth_average
+from .device_types.devices import BaseDevice
+from ..widgets.plot_widget import Plot, smooth_average, roll_plot_values
 
 # Change this if you want to change how many points are kept in memory.
 _max_points = 1e5
 
-class DeviceController(SubControlWidget):
+class DeviceController(SubControlWidget, BaseDevice):
     """
     Generic Device Controller template. This provides a thread to access the device on, as well as stub functions
     for opening and closing the device.
@@ -58,20 +59,6 @@ class DeviceController(SubControlWidget):
     def process_load_saved(self):
         """Process the loaded saved values, implementers should call super().process_load_saved()"""
         self.toggle_paused()
-
-    def open_device(self):
-        """
-        Handles opening the device to read. Here implementers should also handle any exceptions which may occur!
-
-        Returns whether the device opened.
-        """
-        return False
-
-    def close_device(self):
-        """
-        Handles closing the device. Any exceptions thrown will be printed to console and otherwise ignored.
-        """
-        pass
 
     def do_device_update(self):
         """
@@ -220,9 +207,9 @@ class DeviceReader(DeviceController):
         self.custom_logging = False
 
         # Pre-populate array with the start values
-        self.times = numpy.full(int(_max_points), time.time())
-        self.values = numpy.full(int(_max_points), self.value)
-        self.avgs = numpy.full(int(_max_points), self.value)
+        times = numpy.full(int(_max_points), time.time())
+        values = numpy.full(int(_max_points), self.value)
+        avgs = numpy.full(int(_max_points), self.value)
 
         self.do_log = True
         self.do_log_O = False
@@ -239,7 +226,7 @@ class DeviceReader(DeviceController):
                 self.settings.title_fmt = plot_title
             self.settings.axis_name = axis_title
 
-            self.plot_data = [self.times, self.values, self.avgs, False, 0]
+            self.plot_data = [times, values, avgs, False, 0]
 
             self.plot_update_backup = self.plot_widget.update_values
             self.plot_get_data_backup = self.plot_widget.get_data
@@ -369,30 +356,8 @@ class DeviceReader(DeviceController):
         if self.valid:
             timestamp = time.time()
             if self.has_plot:
-                times = self.plot_data[0]
-                values = self.plot_data[1]
-                avgs = self.plot_data[2]
-                existing = self.plot_data[3]
                 plots = self.plot_data
-
-                if not existing: # First time we back-fill the arrays with initial value
-                    times = numpy.full(int(_max_points), timestamp)
-                    values = numpy.full(int(_max_points), self.value)
-                    avgs = smooth_average(values)
-                    plots[3] = True
-                    plots[4] = 0 # clear rolled status
-                else: # Otherwise we roll back the arrays, and append the new value to the end
-                    times = numpy.roll(times,-1)
-                    times[-1] = timestamp
-                    values = numpy.roll(values,-1)
-                    avgs = numpy.roll(avgs,-1)
-                    values[-1] = self.value
-                    plots[4] = plots[4] + 1 # Increment rolled status
-                # Finally update the arrays
-                avgs[-100:] = smooth_average(values[-200:])[-100:]
-                plots[0] = times
-                plots[1] = values
-                plots[2] = avgs
+                roll_plot_values(plots, self.value, timestamp)
 
             if not self.custom_logging:
                 if self.do_log != self.do_log_O or self.data_key != self.data_key_O:

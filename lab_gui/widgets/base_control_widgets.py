@@ -633,11 +633,13 @@ class ControlButton(QPushButton):
     '''
     This is a QPushButton which syncs status with the data_client, based on the given key. If not dataclient or module, it acts like a checkbox
     '''
-    def __init__(self, module=None, key=None, text=["On", "Off"], predicate=lambda x: x, values=[True, False], colours=[_green_, _red_], display_only=False, default_value=None, toggle=None,  *args, **kwargs):
+    def __init__(self, module=None, key=None, text=["On", "Off"], predicate=lambda x: x, values=[True, False], colours=[_green_, _red_], display_only=False, data_source=None, default_value=None, toggle=None,  *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = None
         if module is not None:
             self.client = module.client
+        elif data_source is not None:
+            self.client = data_source
         self.key = key
         if self.key is None:
             self.client = None
@@ -708,11 +710,14 @@ class SingleDisplayWidget(QLabel):
     '''
     This is a QLabel which updates its value based on looking up the key on the data_client. This only works if the module has a valid data_client!
     '''
-    def __init__(self, module, key, fmt, scale = lambda x: x, *args, **kwargs):
+    def __init__(self, module, key, fmt, scale = lambda x: x, data_source=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.scale = scale
-        self.client = module.client
+        if data_source is None:
+            self.client = module.client
+        else:
+            self.client = data_source
         self.key = key
         self.fmt = fmt
 

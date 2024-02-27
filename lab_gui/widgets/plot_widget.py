@@ -134,6 +134,30 @@ def clear_plot(key, reload=False, start=None, end=0):
     if do_run:
         pre_fill(key, start, end)
 
+def roll_plot_values(plots, value, timestamp):
+    times = plots[0]
+    values = plots[1]
+    avgs = plots[2]
+    existing = plots[3]
+    if not existing: # First time we back-fill the arrays with initial value
+        times = numpy.full(int(_max_points), timestamp)
+        values = numpy.full(int(_max_points), value)
+        avgs = smooth_average(values)
+        plots[3] = True
+        plots[4] = 0 # clear rolled status
+    else: # Otherwise we roll back the arrays, and append the new value to the end
+        times = numpy.roll(times,-1)
+        times[-1] = timestamp
+        values = numpy.roll(values,-1)
+        avgs = numpy.roll(avgs,-1)
+        values[-1] = value
+        plots[4] = plots[4] + 1 # Increment rolled status
+    # Finally update the arrays
+    avgs[-100:] = smooth_average(values[-200:])[-100:]
+    plots[0] = times
+    plots[1] = values
+    plots[2] = avgs
+
 def get_values(client, first, key):
     '''This updates the values in _plots for key, it will also try to pre-fill with existing values if first is true'''
     try:
@@ -152,29 +176,11 @@ def get_values(client, first, key):
     if read is None:
         return
     times = plots[0]
-    values = plots[1]
-    avgs = plots[2]
-    existing = plots[3]
+    timestamp = read[0].timestamp()
+    value = read[1]
     # Otherwise, only add if the timestamp has changed
     if read[0].timestamp() != times[-1]:
-        if not existing: # First time we back-fill the arrays with initial value
-            times = numpy.full(int(_max_points), read[0].timestamp())
-            values = numpy.full(int(_max_points), read[1])
-            avgs = smooth_average(values)
-            plots[3] = True
-            plots[4] = 0 # clear rolled status
-        else: # Otherwise we roll back the arrays, and append the new value to the end
-            times = numpy.roll(times,-1)
-            times[-1] = read[0].timestamp()
-            values = numpy.roll(values,-1)
-            avgs = numpy.roll(avgs,-1)
-            values[-1] = read[1]
-            plots[4] = plots[4] + 1 # Increment rolled status
-        # Finally update the arrays
-        avgs[-100:] = smooth_average(values[-200:])[-100:]
-        plots[0] = times
-        plots[1] = values
-        plots[2] = avgs
+        roll_plot_values(plots, value, timestamp)
 
 __threads__ = {} # Cache of threads to prevent the GC from eating them
 __update_rate_ = 2.5e-1
