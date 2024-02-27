@@ -53,3 +53,15 @@ class TENMA722715(PySerialDevice, BasicCurrentMeasure, BasicCurrentSource, Basic
             bool: True, this is always on if present
         """
         return True
+    
+    def open_device(self):
+        opened = super().open_device()
+        if not opened:
+            return opened
+        idn = self.query("*IDN?")
+        time.sleep(self.query_delay)
+        if not idn.startswith('TENMA 72-2715'):
+            print(f"Wrong device response, expected TENMA 72-2715, got {idn}")
+            self.close_device()
+            return False
+        return True

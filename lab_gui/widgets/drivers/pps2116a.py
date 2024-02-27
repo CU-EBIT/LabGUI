@@ -67,3 +67,15 @@ class PPS2116A(PySerialDevice, BasicCurrentMeasure, BasicCurrentSource, BasicVol
         amperage = self.query('ri')
         amperage = float(amperage) / 1000.0
         return amperage
+    
+    def open_device(self):
+        opened = super().open_device()
+        if not opened:
+            return opened
+        idn = self.query("re")
+        time.sleep(self.query_delay)
+        if not idn.startswith('0000'):
+            print(f"Wrong device response, expected 0000, got {idn}")
+            self.close_device()
+            return False
+        return True
