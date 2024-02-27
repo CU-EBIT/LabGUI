@@ -27,7 +27,7 @@ def make_modules(main):
 
     from lab_gui.widgets.base_control_widgets import SaveModule
 
-    module = SaveModule(main)
+    module = SaveModule()
     # By not specifying location, it goes below the rest.
     main.plot_widget.addDock(module.dock)
     main._modules.append(module)

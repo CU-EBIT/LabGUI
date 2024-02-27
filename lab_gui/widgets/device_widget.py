@@ -240,17 +240,20 @@ class DeviceReader(DeviceController):
             self.plot_dock.label.setText(name)
 
         self.full_layout = QVBoxLayout()
+        self.full_layout.setSpacing(0)
+        self.full_layout.setContentsMargins(4,4,4,4)
         self._layout = QHBoxLayout()
         self._layout.setSpacing(0)
         self._layout.addWidget(self.active_button)
         self._layout.addWidget(self.log_button)
 
         self.makeFrame(menu_fn=self.open_settings)
-        self.frame.setLayout(self.full_layout)
         self.full_layout.addLayout(self._layout)
         if has_plot:
             self.full_layout.addWidget(self.plot_widget)
-            self.full_layout.addWidget(addCrossHairs(self.plot_widget.plot_widget))
+            self.plot_tooltip = addCrossHairs(self.plot_widget.plot_widget)
+            self.full_layout.addWidget(self.plot_tooltip)
+        self.frame.setLayout(self.full_layout)
 
     def make_plot(self):
         """This makes the plot_widget, implementers can add custom arguments to their plot, etc by replacing this function

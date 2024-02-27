@@ -227,6 +227,34 @@ def run_plot_thread(client, key):
     # and add to cache to protect from the GC
     __threads__[key] = cache
 
+def adjust_nudge(self, nudge=0):
+
+    def resizeEvent(ev=None):
+        #s = self.size()
+
+        ## Set the position of the label
+        if self.label is None: # self.label is set to None on close, but resize events can still occur.
+            self.picture = None
+            return
+            
+        br = self.label.boundingRect()
+        p = QtCore.QPointF(0, 0)
+        if self.orientation == 'left':
+            p.setY(int(self.size().height()/2 + br.width()/2))
+            p.setX(-nudge)
+        elif self.orientation == 'right':
+            p.setY(int(self.size().height()/2 + br.width()/2))
+            p.setX(int(self.size().width()-br.height()+nudge))
+        elif self.orientation == 'top':
+            p.setY(-nudge)
+            p.setX(int(self.size().width()/2. - br.width()/2.))
+        elif self.orientation == 'bottom':
+            p.setX(int(self.size().width()/2. - br.width()/2.))
+            p.setY(int(self.size().height()-br.height()+nudge))
+        self.label.setPos(p)
+        self.picture = None
+    self.resizeEvent = resizeEvent
+
 class Settings(BaseSettings):
     '''
     Settings class for options for plots
@@ -453,19 +481,27 @@ class Plot(QWidget):
         self.legend = None
         self.font_size()
 
-    def font_size(self, axis='x,y', tick_size=12, title_size=16):
+    def font_size(self, axis='x,y', tick_size=12, title_size=16, line_width=3):
         title_font = QtGui.QFont()
         tick_font = QtGui.QFont()
         tick_font.setPixelSize(tick_size)
         title_font.setPixelSize(title_size)
+        self.line_width = line_width
         if 'x' in axis:
             self.x_axis.setTickFont(tick_font)
             self.x_axis.label.setFont(title_font)
+            adjust_nudge(self.x_axis)
         if 'y' in axis:
             self.y_axis.setTickFont(tick_font)
             self.y_axis.label.setFont(title_font)
             self.y_2_axis.setTickFont(tick_font)
             self.y_2_axis.label.setFont(title_font)
+            adjust_nudge(self.y_axis)
+            adjust_nudge(self.y_2_axis)
+        for plots in self.plots:
+            for plot in plots:
+                old_pen = plot.opts['pen']
+                plot.setPen(color=old_pen.color(), width=line_width)
 
     def start(self):
         '''Starts a timer which we use for updating values'''
@@ -489,7 +525,7 @@ class Plot(QWidget):
         if len(self.keys) == 2:
             # twin the axes
             for (_,label,avg_label) in self.keys:
-                raw_pen = pg.mkPen(plot_colours[n%4], width=3)
+                raw_pen = pg.mkPen(plot_colours[n%4], width=self.line_width)
                 data_raw = pg.PlotDataItem(pen=raw_pen,skipFiniteCheck=True,name=label)
                 self.plots.append([data_raw])
                 if n == 0:
@@ -514,12 +550,12 @@ class Plot(QWidget):
                 n += 1
         else:
             for (_,label,avg_label) in self.keys:
-                raw_pen = pg.mkPen(plot_colours[n%4], width=3)
+                raw_pen = pg.mkPen(plot_colours[n%4], width=self.line_width)
                 data_raw = pg.PlotDataItem(pen=raw_pen,skipFiniteCheck=True,name=label)
                 self.plot_widget.getPlotItem().addItem(data_raw)
                 self.plots.append([data_raw])
                 if self.show_avg:
-                    avg_pen = pg.mkPen(avgs_colours[n%4], width=3)
+                    avg_pen = pg.mkPen(avgs_colours[n%4], width=self.line_width)
                     data_avg = pg.PlotDataItem(pen=avg_pen,skipFiniteCheck=True,name=avg_label)
                     self.plot_widget.getPlotItem().addItem(data_avg)
                     self.plots[-1].append(data_avg)
@@ -532,6 +568,8 @@ class Plot(QWidget):
         
         self.setLayout(QVBoxLayout())
         self.layout().addWidget(self.plot_widget)
+        self.layout().setContentsMargins(0,0,0,0)
+        self.layout().setSpacing(0)
 
     def update_values(self):
         '''Updates the values from _plots, and marks if we did have anything change'''
