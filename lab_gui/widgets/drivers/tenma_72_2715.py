@@ -29,10 +29,10 @@ class TENMA722715(PySerialDevice, BasicCurrentMeasure, BasicCurrentSource, Basic
         """
         return True
     
-    def enable_output(self, output: bool):
+    def enable_output(self, _: bool):
         """This device is turned on by manual button, so this does nothing
         """
-        return output
+        return True
 
     def get_set_voltage(self):
         return float(self.query('VSET1?'))

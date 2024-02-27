@@ -40,6 +40,7 @@ class PPS2116A(PySerialDevice, BasicCurrentMeasure, BasicCurrentSource, BasicVol
             self.turnON()
         else:
             self.turnOFF()
+        return state
 
     def turnON(self):
         self.query('o1')
