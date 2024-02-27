@@ -98,7 +98,7 @@ def scale(dpi):
     """
     return dpi / 96
 
-def addCrossHairs(plot_widget):
+def addCrossHairs(plot_widget, coord_label=None):
     """Adds a coordinate tooltip similar to the crosshairs example from pyqtgraph
 
     Args:
@@ -107,9 +107,8 @@ def addCrossHairs(plot_widget):
     Returns:
         QLabel: the label with the coordinate information
     """
-
-    coord_label = QLabel()
-
+    if coord_label is None:
+        coord_label = QLabel()
     def mouseMoved(evt):
         pos = evt
         if plot_widget.sceneBoundingRect().contains(pos):

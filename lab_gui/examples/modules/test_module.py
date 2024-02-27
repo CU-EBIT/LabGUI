@@ -22,17 +22,28 @@ class ExampleModule(MainModule):
             main (MainModule): module having sub modules added
         """
         from ..widgets.test_device import TestDevice
+        from lab_gui.utils.qt_helper import QtGui
 
         module = TestDevice(self, id=27)
         self.plot_widget.addDock(module.dock)
         self._modules.append(module)
         _module = module
 
+        font = QtGui.QFont()
+        font.setPixelSize(16)
+        module.plot_widget.font_size(axis='x,y', tick_size=18, title_size=20)
+        module.plot_tooltip.setFont(font)
+
         module = TestDevice(self, id=25)
         # This test device we manually place to the left of the previous
         self.plot_widget.addDock(module.dock, 'left', _module.dock)
         self._modules.append(module)
         _module = module
+
+        font = QtGui.QFont()
+        font.setPixelSize(10)
+        module.plot_widget.font_size(axis='x,y', tick_size=8, title_size=10, line_width=5.0)
+        module.plot_tooltip.setFont(font)
 
         from lab_gui.modules.live_plot import PlotModule
         # Here we have an example of adding a module instead of a widget
