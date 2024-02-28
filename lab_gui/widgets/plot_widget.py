@@ -16,6 +16,7 @@ import pyqtgraph as pg
 from ..utils.qt_helper import *
 
 from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
+from .base_control_widgets import register_tracked_key, get_tracked_value
 
 # Tuple of (address, port) for log access
 DATA_LOG_HOST = None
@@ -158,8 +159,11 @@ def roll_plot_values(plots, value, timestamp):
     plots[1] = values
     plots[2] = avgs
 
-def get_values(client, first, key):
+def get_values(client, first:bool, key:str):
     '''This updates the values in _plots for key, it will also try to pre-fill with existing values if first is true'''
+    if first:
+        register_tracked_key(key)
+
     try:
         # Try pre-filling array
         # Only pre-fill if on the real address, and on first run
@@ -171,7 +175,7 @@ def get_values(client, first, key):
     # Now try filling new value in
     
     plots = _plots[key]
-    read = client.get_value(key, True)
+    read = get_tracked_value(key)
     # Skip if not present
     if read is None:
         return

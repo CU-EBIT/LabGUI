@@ -8,7 +8,8 @@ from ..utils.qt_helper import *
 
 from ..widgets.base_control_widgets import SubControlWidget, FrameDock, StateSaver, addCrossHairs
 from .device_types.devices import BaseDevice
-from ..widgets.plot_widget import Plot, smooth_average, roll_plot_values
+from ..widgets.plot_widget import Plot, roll_plot_values
+from ..modules.module import ClientWrapper
 
 # Change this if you want to change how many points are kept in memory.
 _max_points = 1e5
@@ -26,7 +27,7 @@ class DeviceController(SubControlWidget, BaseDevice):
 
         super().__init__(**args)
 
-        self.client = parent.data_client
+        self.client = ClientWrapper()
             
         self.ended = False
         self._alive_ = False
@@ -202,6 +203,7 @@ class DeviceReader(DeviceController):
         self.log_file_name = None
         self.value = 0
         self.valid = False
+        self.data_key_O = None
 
         # If set to true, we will not manage logging from the log_button. This also affects whether the value goes to the data_client
         self.custom_logging = False
@@ -370,7 +372,10 @@ class DeviceReader(DeviceController):
                         self.do_log = False
                     self.do_log_O = self.do_log
                 if self.data_key is not None:
-                    self.client.set_float(self.data_key, self.value)
+                    try:
+                        self.client.set_float(self.data_key, self.value)
+                    except Exception as err:
+                        print(f"Error updating value for {self.name} {err}")
                 if self.do_log:
                     with open(self.log_file_name, 'a') as file:
                         file.write(self.format_values_for_print(timestamp, self.value))
