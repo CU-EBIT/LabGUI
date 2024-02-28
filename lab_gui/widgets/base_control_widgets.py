@@ -2,11 +2,13 @@ import time
 import os
 import json
 
-#  * import due to just being things from Qt
-from ..utils.qt_helper import *
-
 from pyqtgraph.dockarea.DockArea import Dock
 from pyqtgraph.dockarea.Dock import DockLabel
+
+#  * import due to just being things from Qt
+from ..utils.qt_helper import *
+from ..utils import data_client
+from ..utils.data_client import BaseDataClient
 
 _red_ = '#B94700'
 _green_ = '#546223'
@@ -80,12 +82,16 @@ QHeaderView::section
 callbacks = None
 
 def get_tracked_value(key):
-    return callbacks.get_value(key)
+    value = callbacks.get_value(key)
+    if value is not None:
+        return value
+    client = BaseDataClient(data_client.ADDR)
+    value = client.get_value(key)
+    callbacks.values[key] = value
+    return value
 
 def register_tracked_key(key):
     if callbacks.add_listener(key, callbacks.listener):
-        from ..utils import data_client
-        from ..utils.data_client import BaseDataClient
         client = BaseDataClient(data_client.ADDR)
         client.register_callback_server(key, callbacks.port)
 
