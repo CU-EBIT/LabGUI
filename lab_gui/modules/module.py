@@ -1,8 +1,5 @@
-import time
-import threading
 from math import ceil, floor
 import numpy
-from datetime import datetime
 
 import pyqtgraph as pg
 from pyqtgraph import AxisItem
@@ -11,6 +8,7 @@ from pyqtgraph import AxisItem
 from ..utils.qt_helper import *
 from ..utils import input_parser
 from ..utils import data_client
+from ..utils.data_client import BaseDataClient, DataCallbackServer
 from ..widgets.base_control_widgets import getGlobalStyleSheet
 from ..widgets.base_control_widgets import LineEdit, FrameDock, ControlLine, StateSaver
 
@@ -557,17 +555,19 @@ __keys__ = []
 __open__ = True
 USE_ALL = True
 
-global _value_thread
-_value_thread = None
 global ended
 ended = False
 global local_server
 local_server = None
 
-def update_values():
-    global _value_thread
-    global local_server
+global access_lock
+access_lock = False
 
+def update_values():
+    global local_server
+    
+    from ..widgets import base_control_widgets
+    base_control_widgets.callbacks = ValueListener()
     if data_client.ADDR == None and local_server == None:
         from ..utils import data_server as server
         import socket
@@ -582,82 +582,25 @@ def update_values():
             msgFromServer = connection.recvfrom(BUFSIZE)
             print(msgFromServer)
         except:
-            # In this case, we start our own server locally.
-            local_server = server.BaseDataServer()
-            # have it make a thread, and start it
-            local_server.thread = local_server.make_thread()
-            local_server.thread.start()
-        data_client.ADDR = server.ADDR
+            (server_tcp, _), (server_udp, _) = server.make_server_threads()
+            local_server = (server_tcp, server_udp)
+        data_client.ADDR = ("127.0.0.1", server.ADDR[1])
 
-    client = data_client.BaseDataClient(data_client.ADDR)
+class ClientWrapper(BaseDataClient):
 
-    def run():
-        avg_t = 0.05
-        t_total = 0
-        for _ in range(20):
-            start = time.time()
-            values = client.get_all()
-            t_total += time.time() - start
-        dt_per = t_total / 20
-        do_all = USE_ALL and dt_per < avg_t / 2
-
-        while(not ended):
-            start = time.time()
-            if do_all:
-                client.init_connection()
-                values = client.get_all()
-                for key, value in values.items():
-                    __values__[key] = value
-            else:
-                for key in __keys__:
-                    var = client.get_value(key)
-                    if var is not None:
-                        __values__[key] = var
-            dt = time.time() - start
-            sleep = avg_t - dt
-            if sleep > 0:
-                time.sleep(sleep)
-
-    _value_thread = threading.Thread(target=run, daemon=True)
-    _value_thread.start()
-
-class ClientWrapper:
     def __init__(self) -> None:
-        self.set_client = data_client.BaseDataClient(data_client.ADDR)
+        super().__init__(data_client.ADDR)
 
-    def get_value(self, key, immediate=False):
-        if not key in __keys__:
-            __keys__.append(key)
-        if not key in __values__:
-            if immediate:
-                return None
-            self.set_client.init_connection()
-            self.set_client.connection.settimeout(1)
-            return self.set_client.get_value(key)
-        return __values__[key]
+class ValueListener(DataCallbackServer):
 
-    def get_all(self):
-        if USE_ALL:
-            return __values__
-        self.set_client.init_connection()
-        self.set_client.connection.settimeout(1)
-        return self.set_client.get_all()
+    def __init__(self):
+        super().__init__()
+        self.values = {}
 
-    def get_float(self, key):
-        return self.get_value(key)
-    
-    def get_bool(self, key):
-        return self.get_value(key)
+    def listener(self, key, value):
+        self.values[key] = value
 
-    def get_var(self, key):
-        return self.get_value(key)
-
-    def set_value(self, key, value):
-        self.set_client.init_connection()
-        __values__[key] = (datetime.now(), value)
-        return self.set_client.set_value(key, value)
-
-    def set_float(self, key, value):
-        self.set_client.init_connection()
-        __values__[key] = (datetime.now(), value)
-        return self.set_client.set_float(key, value)
+    def get_value(self, key):
+        if key in self.values:
+            return self.values[key]
+        return None

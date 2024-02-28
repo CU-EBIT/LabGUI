@@ -76,6 +76,19 @@ QHeaderView::section
 }}
 """
 
+# This is a ValueListener (see modules.module.ValueListener)
+callbacks = None
+
+def get_tracked_value(key):
+    return callbacks.get_value(key)
+
+def register_tracked_key(key):
+    if callbacks.add_listener(key, callbacks.listener):
+        from ..utils import data_client
+        from ..utils.data_client import BaseDataClient
+        client = BaseDataClient(data_client.ADDR)
+        client.register_callback_server(key, callbacks.port)
+
 def widget_dpi(widget):
     """Retrieves the logicalDotsPerInch for the screen of the widget
 
@@ -713,10 +726,12 @@ class SingleDisplayWidget(QLabel):
         super().__init__(*args, **kwargs)
 
         self.scale = scale
-        if data_source is None:
-            self.client = module.client
+        if data_source is not None:
+            self.get_value = data_source.get_value
         else:
-            self.client = data_source
+            self.get_value = get_tracked_value
+            register_tracked_key(key)
+        
         self.key = key
         self.fmt = fmt
 
@@ -735,7 +750,7 @@ class SingleDisplayWidget(QLabel):
         self.setMinimumWidth(int(w))
 
     def update_values(self):
-        var = self.client.get_value(self.key)
+        var = self.get_value(self.key)
         if var is not None:
             self.value = var[1]
         self.update_labels()
@@ -996,8 +1011,14 @@ class TableDisplayWidget(QTableWidget):
             for i in range(1,len(row),2):
                 key = row[i]
                 fmt = row[i + 1]
-                
-                var = self.client.get_value(key)
+
+                var = None
+                if self.init:
+                    register_tracked_key(key)
+                var = get_tracked_value(key)
+                if var is None:
+                    # Manually look it up initially if needed
+                    var = self.client.get_value(key)
                 val = None
                 if var is not None:
                     val = var

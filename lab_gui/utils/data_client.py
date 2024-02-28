@@ -2,7 +2,7 @@ import socket
 from datetime import datetime
 import pickle
 import struct
-import time
+import threading
 
 # Adds prints if things go wrong
 DEBUG = False
@@ -142,6 +142,7 @@ KEY_ERR = b'key_err!'
 MODE_ERR = b'mode_err!'
 UNPACK_ERR = b'unpack_err'
 SUCCESS = b'success!'
+CALLBACK = b'callback'
 FILLER = b"??"
 BUFSIZE = 1024
 
@@ -158,6 +159,13 @@ _open_cmd = OPEN + DELIM + FILLER + OPEN
 _close_cmd = CLOSE + DELIM + FILLER + CLOSE
 # _hello = HELLO + DELIM + HELLO
 all_request = ALL + DELIM + FILLER + ALL
+
+def callback_request(key, port):
+    msg = key.encode() + DALIM + f'{port}'.encode()
+    s = len(msg)
+    # We encode size in along with the message
+    size = struct.pack("<bb", int(s&31), int(s>>5))
+    return CALLBACK + DELIM + size + msg
 
 def pack_value(timestamp, value):
     '''Packs the given value, if it doesn't use a standard type, it pickles it instead'''
@@ -227,63 +235,129 @@ def get_msg(key):
     # Server doesn't presently use the size bytes here, hence FILLER
     return GET + DELIM + FILLER + str.encode(key)
 
+class DataCallbackServer:
+    def __init__(self, port = 0) -> None:
+        '''addr is address/port tuple, custom_port would call select() if true'''
+        self.connection = None
+        self.addr = ("0.0.0.0", port)
+        self.connection = socket.socket()
+        self.connection.bind(self.addr)
+        self.port = self.connection.getsockname()[1]
+        self.connection.listen(8)
+
+        self.listeners = {}
+
+        self._running_ = False
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    def __del__(self):
+        self._running_ = False
+        if self.connection is not None:
+            try:
+                self.connection.shutdown(socket.SHUT_RDWR)
+                self.connection.close()
+            except:
+                pass
+
+    def add_listener(self, key, listener):
+        if not key in self.listeners:
+            self.listeners[key] = []
+        listeners = self.listeners[key]
+        if not listener in listeners:
+            listeners.append(listener)
+            return True
+        return False
+
+    def handle_msg(self, message):
+        success, key, unpacked = unpack_value(message)
+        if success and key in self.listeners:
+            for listener in self.listeners[key]:
+                listener(key, unpacked)
+
+    def run(self):
+        '''run loop entry point for the server, probably best to run via a separate thread'''
+        self._running_ = True
+        print(f'Starting Callback Server! {self.port}')
+        while(self._running_):
+            try:
+                conn, _ = self.connection.accept()
+                message = conn.recv(BUFSIZE)
+                self.handle_msg(message)
+            except Exception as err:
+                print(err)
+
 class BaseDataClient:
     '''Python client implementation'''
     def __init__(self, addr=ADDR, custom_port=False) -> None:
         '''addr is address/port tuple, custom_port would call select() if true'''
         self.connection = None
-        assert addr is not None
+        self.tcp = True
         self.addr = addr
+        self.custom_port = -1
         self.root_port = addr[1]
         self.reads = {}
         self.values = {}
-        self.init_connection()
-        self.custom_port = custom_port
         if custom_port:
             self.select()
 
     def __del__(self):
-        self.close()
+        if self.tcp and self.custom_port != -1:
+            self.init_connection()
+            self.close()
 
     def change_port(self, port):
         '''Changes the port we connect over'''
         self.close()
-        self.init_connection()
         self.addr = (self.addr[0], port)
+        if port != self.root_port:
+            self.custom_port = port
 
-    def init_connection(self, depth=0):
+    def init_connection(self):
         '''Starts a new connection, closes existing one if present.'''
         if self.connection is not None:
             self.close()
-        self.connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-        if self.connection is not None:
+        if self.tcp:
+            self.connection = socket.socket()
+            self.connection.connect(self.addr)
             self.connection.settimeout(0.1)
         else:
-            if depth > 10:
-                print("Error initing connection, tried too many times")
-                return
-            time.sleep(0.01)
-            self.init_connection(depth+1)
+            self.connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
+            self.connection.settimeout(0.1)
 
     def close(self):
         if self.connection is not None:
             try:
-                if self.custom_port:
+                if self.addr[1] != self.root_port:
                     self.connection.sendto(_close_cmd, self.addr)
                 self.connection.close()
+                self.connection = None
             except Exception as err:
-                print(err)
-                print('error closing?')
-            self.connection = None
+                print(f'error closing? {err}')
+    
+    def register_callback_server(self, key, port):
+        try:
+            callback_set = callback_request(key, port)
+            self.send_msg(callback_set)
+        except Exception as err:
+            print(f'error registering a callback? {err} for {key}')
+
+    def send_msg(self, msg):
+        if self.connection == None or self.tcp:
+            self.init_connection()
+        self.connection.sendto(msg, self.addr)
+        msgFromServer = self.connection.recvfrom(BUFSIZE)
+        return msgFromServer
 
     def select(self):
         '''This is the Python equivalent of the "connect" function in C++ version, it also ensures a new port'''
+        if self.tcp and self.custom_port != -1:
+            return True
         try:
             # ensure we are in the initial port
             # this also closes the connection if it existed
             self.change_port(self.root_port)
-            self.connection.sendto(_open_cmd, self.addr)
-            msgFromServer = self.connection.recvfrom(BUFSIZE)
+            msgFromServer = self.send_msg(_open_cmd)
             new_port = int(msgFromServer[0].decode("utf-8").replace("open:__:", "").replace("open_::_", ""))
             self.change_port(new_port)
             return True
@@ -295,49 +369,66 @@ class BaseDataClient:
     def get_value(self, key):
         '''Requests the value associated with `key` from the server'''
 
-        _key = key
-        # If we had already read it in error before, return that
-        if _key in self.reads:
-            return self.reads.pop(_key) 
-
         bytesToSend = get_msg(key)
-        n = 0
         unpacked = ''
 
-        # Otherwise try a few times at reading, we can fail for UDP reasons
-        while n < 10:
-            n += 1
-            # Send to server using created UDP socket
+        if self.tcp:
             try:
-                self.connection.sendto(bytesToSend, self.addr)
-                msgFromServer = self.connection.recvfrom(BUFSIZE)
+                msgFromServer = self.send_msg(bytesToSend)
                 success, _key2, unpacked = unpack_value(msgFromServer[0])
-
                 if unpacked == KEY_ERR:
                     if DEBUG:
                         print(f"Error getting {key}")
                     return None
-                # If we request too fast, things get out of order.
-                # This allows caching the wrong reads for later
-                if _key2 != _key:
-                    n-=1
-                    self.reads[_key2] = unpacked
-                    continue
                 if success:
                     return unpacked
-                # Try to reset connection if we failed to unpack
-                if unpacked == UNPACK_ERR:
-                    if DEBUG:
-                        print('resetting connection')
-                    self.init_connection()
+                else:
+                    print(f"Unspecified Error getting {key}")
+                    return None
             except Exception as err:
-                # Attempt to reset the connection
-                self.init_connection()
                 msg = f'Error getting value for {key}! {err}'
                 # Timeouts can happen, so only print ones that did not
                 if DEBUG and not 'timed out' in msg:
                     print(msg)
-                pass
+                return None
+        else:
+            _key = key
+            # If we had already read it in error before, return that
+            if _key in self.reads:
+                return self.reads.pop(_key) 
+
+            n = 0
+            # Otherwise try a few times at reading, we can fail for UDP reasons
+            while n < 10:
+                n += 1
+                # Send to server using created UDP socket
+                try:
+                    msgFromServer = self.send_msg(bytesToSend)
+                    success, _key2, unpacked = unpack_value(msgFromServer[0])
+
+                    if unpacked == KEY_ERR:
+                        if DEBUG:
+                            print(f"Error getting {key}")
+                        return None
+                    # If we request too fast, things get out of order.
+                    # This allows caching the wrong reads for later
+                    if _key2 != _key:
+                        n-=1
+                        self.reads[_key2] = unpacked
+                        continue
+                    if success:
+                        return unpacked
+                    # Try to reset connection if we failed to unpack
+                    if unpacked == UNPACK_ERR:
+                        if DEBUG:
+                            print('resetting connection')
+                        self.init_connection()
+                except Exception as err:
+                    msg = f'Error getting value for {key}! {err}'
+                    # Timeouts can happen, so only print ones that did not
+                    if DEBUG and not 'timed out' in msg:
+                        print(msg)
+                    pass
         if DEBUG:
             print(f'failed to get! {key} {unpacked}')
         return None
@@ -397,8 +488,6 @@ class BaseDataClient:
         returns if set successfully'''
         if timestamp is None:
             timestamp = datetime.now()
-        if self.connection is None:
-            self.init_connection()
         # Package the key value pair and timestamp for server
         bytesToSend = set_msg(key, timestamp, value)
         # Ensure is in packet size range
@@ -408,44 +497,56 @@ class BaseDataClient:
             return False
         try:
             # If so, try to sent to server
+            if self.connection == None or self.tcp:
+                self.init_connection()
             self.connection.sendto(bytesToSend, self.addr)
             msgFromServer = self.connection.recvfrom(BUFSIZE)
             # And see if the server responded appropriately
             if self.check_set(key, msgFromServer[0]):
                 return True
         except:
-            try:
-                self.close()
-                self.init_connection()
-            except:
-                pass
+            pass
         return False
 
     def get_all(self):
         '''Requests all values from server, returns a map of all found values. This map may be incomplete due to lost packets.'''
         self.values = {}
+        if self.connection == None or self.tcp:
+            self.init_connection()
         self.connection.sendto(all_request, self.addr)
-        done = False
-        while not done:
+
+        if self.tcp:
             try:
-                msg = self.connection.recvfrom(BUFSIZE)
-                sucess, key, unpacked = unpack_value(msg[0])
-                if unpacked == UNPACK_ERR:
-                    continue
-                elif key == '':
-                    continue
-                elif sucess:
-                    self.values[key] = unpacked
-                elif unpacked == ALL:
-                    # end of all send recieved
-                    done = True
+                _msg = self.connection.recvfrom(BUFSIZE)[0]
+                msg = _msg
+
+                while _msg != b'':
+                    _msg = self.connection.recvfrom(BUFSIZE)[0]
+                    msg = msg + _msg
+                
+                done = False
+                while not done:
+                    next_dalim = msg.index(DALIM)
+                    key = msg[0:next_dalim]
+                    if key[2:] != b'success!':
+                        if key == b'':
+                            break
+                        size = (key[0]&31) + ((key[1]&31) << 5)
+                        value = msg[0: size + 2]
+                        data = value
+                        msg = msg[size + 2:]
+                        success, key, unpacked = unpack_value(data)
+                        if success:
+                            self.values[key] = unpacked
+                    else:
+                        done = True
+                    done = done or msg == b''
             except KeyboardInterrupt:
                 pass
             except Exception as err:
-                msg = f'Error getting value! {err}'
-                if 'timed out' in msg:
+                _msg = f'Error getting all value! {err}, {msg}'
+                if 'timed out' in _msg:
                     done = True
-                    break
                 elif DEBUG:
-                    print(msg)
+                    print(_msg)
         return self.values

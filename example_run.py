@@ -2,7 +2,7 @@
 
 ### If running a server manually, uncomment below and replace this ADDR accordingly
 # import utils.data_client as data_client
-# data_client.ADDR = ("host", 20002) 
+# data_client.ADDR = ("host", 30002) 
 
 def make_modules(main):
     """Here we add a few of our own modules.
