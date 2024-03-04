@@ -41,6 +41,7 @@ htmlcov/
 settings/
 _run_.py
 _test_*
+*_data_cache*
 .tox/
 .nox/
 .coverage

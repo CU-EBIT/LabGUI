@@ -567,24 +567,27 @@ def update_values():
     global local_server
     
     from ..widgets import base_control_widgets
-    base_control_widgets.callbacks = ValueListener()
     if data_client.ADDR == None and local_server == None:
         from ..utils import data_server as server
-        import socket
-        from ..utils.data_client import HELLO, DELIM, BUFSIZE
+        import time
+        from ..utils.data_client import HELLO, DELIM
         print("Making Server!")
         _hello = HELLO + DELIM + HELLO
         # Check for a server already running
         try:
-            connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
-            connection.settimeout(0.1)
-            connection.sendto(_hello, server.ADDR)
-            msgFromServer = connection.recvfrom(BUFSIZE)
-            print(msgFromServer)
-        except:
-            (server_tcp, _), (server_udp, _) = server.make_server_threads()
-            local_server = (server_tcp, server_udp)
+            addr = server.ADDR
+            if addr[0] == "0.0.0.0":
+                addr = ("127.0.0.1", server.ADDR[1])
+            client = data_client.BaseDataClient(addr)
+            print(f"Trying hello to {addr}")
+            client.send_msg(_hello)
+        except Exception as err:
+            print(err)
+            (server_tcp, _), (server_udp, _), (saver, _) = server.make_server_threads()
+            time.sleep(0.5)
+            local_server = (server_tcp, server_udp, saver)
         data_client.ADDR = ("127.0.0.1", server.ADDR[1])
+    base_control_widgets.callbacks = ValueListener(data_client.ADDR)
 
 class ClientWrapper(BaseDataClient):
 
@@ -593,8 +596,8 @@ class ClientWrapper(BaseDataClient):
 
 class ValueListener(DataCallbackServer):
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, client_addr=data_client.ADDR):
+        super().__init__(client_addr=client_addr)
         self.values = {}
 
     def listener(self, key, value):

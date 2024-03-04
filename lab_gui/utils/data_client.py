@@ -3,6 +3,7 @@ from datetime import datetime
 import pickle
 import struct
 import threading
+import time
 
 # Adds prints if things go wrong
 DEBUG = False
@@ -160,8 +161,11 @@ _close_cmd = CLOSE + DELIM + FILLER + CLOSE
 # _hello = HELLO + DELIM + HELLO
 all_request = ALL + DELIM + FILLER + ALL
 
-def callback_request(key, port):
-    msg = key.encode() + DALIM + f'{port}'.encode()
+def callback_request(key, port, closing=False):
+    if closing:
+        msg = key.encode() + DALIM + f'x{port}'.encode()
+    else:
+        msg = key.encode() + DALIM + f'{port}'.encode()
     s = len(msg)
     # We encode size in along with the message
     size = struct.pack("<bb", int(s&31), int(s>>5))
@@ -236,22 +240,40 @@ def get_msg(key):
     return GET + DELIM + FILLER + str.encode(key)
 
 class DataCallbackServer:
-    def __init__(self, port = 0) -> None:
+    def __init__(self, port = 0, client_addr=ADDR) -> None:
         '''addr is address/port tuple, custom_port would call select() if true'''
         self.connection = None
         self.addr = ("0.0.0.0", port)
+        self.client_addr = client_addr
         self.connection = socket.socket()
         self.connection.bind(self.addr)
         self.port = self.connection.getsockname()[1]
         self.connection.listen(8)
 
         self.listeners = {}
+        self.last_heard_times = {}
 
         self._running_ = False
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
+        self.alive_thread = threading.Thread(target=self.check_alive, daemon=True)
+        self.alive_thread.start()
+
     def __del__(self):
+        self.close()
+
+    def close(self):
+        
+        try:
+            client = BaseDataClient(self.client_addr)
+            client.init_connection()
+            callback_set = callback_request("???", self.port, closing=True)
+            client.send_msg(callback_set)
+            client.close()
+        except:
+            pass
+
         self._running_ = False
         if self.connection is not None:
             try:
@@ -259,10 +281,12 @@ class DataCallbackServer:
                 self.connection.close()
             except:
                 pass
+        self.port = -1
 
     def add_listener(self, key, listener):
         if not key in self.listeners:
             self.listeners[key] = []
+        self.last_heard_times[key] = 0
         listeners = self.listeners[key]
         if not listener in listeners:
             listeners.append(listener)
@@ -271,6 +295,7 @@ class DataCallbackServer:
 
     def handle_msg(self, message):
         success, key, unpacked = unpack_value(message)
+        self.last_heard_times[key] = time.time()
         if success and key in self.listeners:
             for listener in self.listeners[key]:
                 listener(key, unpacked)
@@ -278,14 +303,35 @@ class DataCallbackServer:
     def run(self):
         '''run loop entry point for the server, probably best to run via a separate thread'''
         self._running_ = True
-        print(f'Starting Callback Server! {self.port}')
+        message = b''
         while(self._running_):
             try:
                 conn, _ = self.connection.accept()
                 message = conn.recv(BUFSIZE)
+                if message == b'':
+                    continue
                 self.handle_msg(message)
             except Exception as err:
-                print(err)
+                if self._running_:
+                    print(err, message)
+
+    def check_alive(self):
+        '''Every so often check that server still knows about us'''
+        self._running_ = True
+        while self._running_:
+            time.sleep(1)
+            keys = []
+            now = time.time()
+            for key, last_time in self.last_heard_times.items():
+                if now - last_time > 10:
+                    keys.append(key)
+            if len(keys):
+                client = BaseDataClient(self.client_addr)
+                client.init_connection()
+                for key in keys:
+                    self.last_heard_times[key] = now
+                    client.register_callback_server(key, self.port)
+                client.close()
 
 class BaseDataClient:
     '''Python client implementation'''
@@ -298,6 +344,7 @@ class BaseDataClient:
         self.root_port = addr[1]
         self.reads = {}
         self.values = {}
+        self.cb_ports = []
         if custom_port:
             self.select()
 
@@ -338,6 +385,8 @@ class BaseDataClient:
     def register_callback_server(self, key, port):
         try:
             callback_set = callback_request(key, port)
+            if not port in self.cb_ports:
+                self.cb_ports.append(port)
             self.send_msg(callback_set)
         except Exception as err:
             print(f'error registering a callback? {err} for {key}')
@@ -377,13 +426,12 @@ class BaseDataClient:
                 msgFromServer = self.send_msg(bytesToSend)
                 success, _key2, unpacked = unpack_value(msgFromServer[0])
                 if unpacked == KEY_ERR:
-                    if DEBUG:
-                        print(f"Error getting {key}")
+                    print(f"Error getting {key}")
                     return None
                 if success:
                     return unpacked
                 else:
-                    print(f"Unspecified Error getting {key}")
+                    print(f"Unspecified Error getting {key}, {msgFromServer}")
                     return None
             except Exception as err:
                 msg = f'Error getting value for {key}! {err}'
@@ -407,8 +455,7 @@ class BaseDataClient:
                     success, _key2, unpacked = unpack_value(msgFromServer[0])
 
                     if unpacked == KEY_ERR:
-                        if DEBUG:
-                            print(f"Error getting {key}")
+                        print(f"Error getting {key}")
                         return None
                     # If we request too fast, things get out of order.
                     # This allows caching the wrong reads for later
@@ -515,6 +562,7 @@ class BaseDataClient:
             self.init_connection()
         self.connection.sendto(all_request, self.addr)
 
+        msg = b''
         if self.tcp:
             try:
                 _msg = self.connection.recvfrom(BUFSIZE)[0]
