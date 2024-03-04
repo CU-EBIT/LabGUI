@@ -654,8 +654,11 @@ class ControlButton(QPushButton):
     def __init__(self, module=None, key=None, text=["On", "Off"], predicate=lambda x: x, values=[True, False], colours=[_green_, _red_], display_only=False, data_source=None, default_value=None, toggle=None,  *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = None
+        self.tracked = False
         if module is not None:
             self.client = module.client
+            self.tracked = True
+            register_tracked_key(key)
         elif data_source is not None:
             self.client = data_source
         self.key = key
@@ -692,7 +695,9 @@ class ControlButton(QPushButton):
     def update_values(self):
         if self.disabled:
             return
-        if self.client is None:
+        if self.tracked:
+            var = get_tracked_value(self.key)
+        elif self.client is None:
             var = None
         else:
             var = self.client.get_value(self.key)
@@ -732,6 +737,7 @@ class SingleDisplayWidget(QLabel):
         super().__init__(*args, **kwargs)
 
         self.scale = scale
+        self.value = 0
         if data_source is not None:
             self.get_value = data_source.get_value
         else:
@@ -779,6 +785,7 @@ class SingleInputWidget(LineEdit):
         self.key = key
         self.fmt = fmt
         self.init_done = time.time()
+        self.value = 0
 
         self.typing = typing
 
