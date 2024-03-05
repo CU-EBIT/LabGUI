@@ -571,7 +571,6 @@ def update_values():
         from ..utils import data_server as server
         import time
         from ..utils.data_client import HELLO, DELIM
-        print("Making Server!")
         _hello = HELLO + DELIM + HELLO
         # Check for a server already running
         try:
@@ -579,13 +578,14 @@ def update_values():
             if addr[0] == "0.0.0.0":
                 addr = ("127.0.0.1", server.ADDR[1])
             client = data_client.BaseDataClient(addr)
-            print(f"Trying hello to {addr}")
             client.send_msg(_hello)
-        except Exception as err:
-            print(err)
+        except Exception:
+            print("Making Server!")
             (server_tcp, _), (server_udp, _), (saver, _) = server.make_server_threads()
+            (server_logs, _) = server.make_log_thread()
+            data_client.DATA_LOG_HOST = ("127.0.0.1", server_logs.addr[1])
             time.sleep(0.5)
-            local_server = (server_tcp, server_udp, saver)
+            local_server = (server_tcp, server_udp, saver, server_logs)
         data_client.ADDR = ("127.0.0.1", server.ADDR[1])
     base_control_widgets.callbacks = ValueListener(data_client.ADDR)
 

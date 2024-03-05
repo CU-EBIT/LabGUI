@@ -14,15 +14,13 @@ import pyqtgraph as pg
 
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
+from ..utils import data_client
 
 from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
 from .base_control_widgets import register_tracked_key, get_tracked_value
 
-# Tuple of (address, port) for log access
-DATA_LOG_HOST = None
-
 def can_access_logs():
-    return DATA_LOG_HOST != None
+    return data_client.DATA_LOG_HOST != None
 
 def get_value_log(key, all=True, start=1, end=0, last=None):
     '''
@@ -40,7 +38,7 @@ def get_value_log(key, all=True, start=1, end=0, last=None):
     try:
         client_socket = socket.socket()     # instantiate
         client_socket.settimeout(10)        # Set a longish timeout, as we can request many things
-        client_socket.connect(DATA_LOG_HOST)# connect to the server
+        client_socket.connect(data_client.DATA_LOG_HOST)# connect to the server
 
         # Assemble message based on parameters
         if all:

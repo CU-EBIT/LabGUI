@@ -11,6 +11,9 @@ DEBUG = False
 # Address to use, ensure that you set this in your implementation!
 ADDR = None
 
+# Tuple of (address, port) for log access
+DATA_LOG_HOST = None
+
 class DoubleValue:
     '''Implementation of a value containing a 64 bit floating point number'''
     def __init__(self) -> None:
@@ -426,7 +429,8 @@ class BaseDataClient:
                 msgFromServer = self.send_msg(bytesToSend)
                 success, _key2, unpacked = unpack_value(msgFromServer[0])
                 if unpacked == KEY_ERR:
-                    print(f"Error getting {key}")
+                    if DEBUG:
+                        print(f"Error getting {key}")
                     return None
                 if success:
                     return unpacked
@@ -455,7 +459,8 @@ class BaseDataClient:
                     success, _key2, unpacked = unpack_value(msgFromServer[0])
 
                     if unpacked == KEY_ERR:
-                        print(f"Error getting {key}")
+                        if DEBUG:
+                            print(f"Error getting {key}")
                         return None
                     # If we request too fast, things get out of order.
                     # This allows caching the wrong reads for later
