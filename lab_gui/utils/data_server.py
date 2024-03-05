@@ -38,6 +38,7 @@ CLOSED = SUCCESS + DALIM + CLOSE
 CALLBACK_SUCCESS = CALLBACK + DALIM + SUCCESS
 
 ADDR = ("0.0.0.0", 30002)
+LOG_ADDR = ("0.0.0.0", 31002)
 callback_targets = {}
 
 class BaseDataServer:
@@ -360,45 +361,199 @@ class LogLoader:
 
     def __init__(self, key, dir=SAVE_DIR) -> None:
         self.filename = dir + key + ".dat"
+        self.file_end = 0
         self.values = []
+        self.times = []
+        self._np_v = None
+        self._np_t = None
 
     def load(self):
-        from data_client import TYPES
+        try:
+            from .data_client import TYPES
+        except:
+            from data_client import TYPES
         import numpy as np
         try:
+            file_size = os.stat(self.filename).st_size
+            if self.file_end > file_size:
+                self.file_end = 0
+            elif self.file_end == file_size:
+                return self._np_t, self._np_v
+            
             file = open(self.filename, 'rb')
+            file.seek(self.file_end)
             vars = file.read()
+
             self.raw_values = vars
             id = vars[0]
             TYPE = TYPES[id - 1]
             tst = TYPE()
             length = tst.size()
+
+            self.file_end = file_size
+
             number = len(vars) / length
             if number != int(number):
                 raise RuntimeWarning("Wrong size in file!")
             number = int(number)
+            print(f"Read {number} new values!")
 
             # numpy stuff from Tim
             vars = np.array(list(vars), dtype='uint8')
             vars = np.reshape(vars, (-1, length))
 
             _times = vars[:,1:9].copy(order="C")
-            _values = vars[:,9:].copy(order="C")
-
             decode_time = lambda x: struct.unpack("d", x)[0]
-            decode_value = lambda x: struct.unpack("d", x)[0]
+
+            if id == 1:
+                _values = vars[:,9:].copy(order="C")
+                decode_value = lambda x: struct.unpack("d", x)[0]
 
             times = np.array([decode_time(x) for x in _times])
             values = np.array([decode_value(x) for x in _values])
 
-            return times, values
+            for t in times:
+                self.times.append(t)
+            for v in values:
+                self.values.append(v)
+            self._np_t = np.array(self.times)
+            self._np_v = np.array(self.values)
+
+            return self._np_t, self._np_v
         except Exception as err:
             print(err)
             return None, None
 
-def make_server_threads():
-    server_tcp = BaseDataServer(tcp=True, addr=("0.0.0.0", 30002))
-    server_udp = BaseDataServer(tcp=False, addr=("0.0.0.0", 20002))
+class LogServer:
+
+    def __init__(self, addr=LOG_ADDR) -> None:
+        self.addr = addr
+        self.connection = socket.socket()
+        self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.connection.bind(addr)
+        self.connection.listen(256)
+        self._running_ = False
+        self.logs = {}
+
+    def split(self, resp):
+        resps = []
+        resps.append(b'\0\0start\0\0')
+        while len(resp) > 4078:
+            split = resp[0:4078]
+            resp = resp[4078:]
+            resps.append(split)
+        resps.append(resp)
+        resps.append(b'\0\0end\0\0')
+        return resps
+    
+    def update_values(self, key, last_point=None):
+        import datetime
+        import json
+        from dateutil import parser
+        if key in self.logs:
+            log = self.logs[key]
+        else:
+            log = LogLoader(key)
+            self.logs[key] = log
+        x, y = log.load()
+        if x is None:
+            return 'error!'
+        
+        now = time.time()
+        end = now + 1e6
+        start = now - 3600
+        if last_point is not None:
+            start = parser.parse(last_point).timestamp()
+
+        mask = (x>=start)&(x<=end)
+        x = x[mask]
+        y = y[mask]
+        values = []
+        for i in range(len(x)):
+            values.append([datetime.datetime.fromtimestamp(x[i]).isoformat(), y[i]])
+        resp = json.dumps(values)
+        return resp
+
+    def get_values(self, key, start=1, end=0):
+        import datetime
+        import json
+        if key in self.logs:
+            log = self.logs[key]
+        else:
+            log = LogLoader(key)
+            self.logs[key] = log
+        x, y = log.load()
+        if x is None:
+            return 'error!'
+        now = time.time()
+        start, end = now - start * 3600, now - end * 3600
+        mask = (x>=start)&(x<=end)
+        x = x[mask]
+        y = y[mask]
+        values = []
+        for i in range(len(x)):
+            values.append([datetime.datetime.fromtimestamp(x[i]).isoformat(), y[i]])
+        resp = json.dumps(values)
+        return resp
+
+    def read_loop(self):
+        conn, addr = self.connection.accept()  # accept new connection
+        # receive data stream. it won't accept data packet greater than 4096 bytes
+        data = conn.recv(4096).decode()
+        print(f"Request from {addr}:{data}")
+        if not data:
+            # if data is not received break
+            conn.close()  # close the connection
+            return
+        data = data.split('\x00')
+        cmd = data[0]
+        key = data[1]
+        try:
+            if cmd == 'all':
+                start = 1
+                end = 0
+                if len(data) > 2:
+                    start = float(data[2])
+                if len(data) > 3:
+                    end = float(data[3])
+                try:
+                    resp = self.get_values(key, start, end).encode()
+                except Exception as err:
+                    print(f'Error in all processing {err}')
+                    resp = b'error!'
+                for resp in self.split(resp):
+                    conn.send(resp)
+            elif cmd == 'update':
+                last_point = None
+                if len(data) > 2:
+                    last_point = data[2]
+                resp = self.update_values(key, last_point).encode()
+                for resp in self.split(resp):
+                    conn.send(resp)
+            else:
+                conn.send(b'error!')
+        except Exception as err:
+            print(f'Error in request {err}')
+            conn.send(b'error!')
+        conn.close()
+
+    def run(self):
+        print("Starting log server thread")
+        self._running_ = True
+        while(self._running_):
+            try:
+                self.read_loop()
+            except Exception as err:
+                print(f"Exception in log run loop, {err}")
+
+    def make_thread(self):
+        '''Makes a daemon thread that runs our run loop when started'''
+        thread = threading.Thread(target=self.run, daemon=True)
+        return thread
+
+def make_server_threads(addr_tcp=("0.0.0.0", 30002), addr_udp=("0.0.0.0", 20002)):
+    server_tcp = BaseDataServer(tcp=True, addr=addr_tcp)
+    server_udp = BaseDataServer(tcp=False, addr=addr_udp)
     saver = DataSaver()
 
     thread_tcp = server_tcp.make_thread()
@@ -412,12 +567,26 @@ def make_server_threads():
 
     return (server_tcp, thread_tcp), (server_udp, thread_udp), (saver, save_thread)
 
+def make_log_thread(addr=("0.0.0.0", 31002)):
+    server = LogServer(addr)
+    thread = server.make_thread()
+    thread.start()
+    return (server, thread)
+
 if __name__ == "__main__":
-    # construct a server
-    (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
-    # Then wait for enter to be pressed before stopping
-    input("")
-    server_tcp._running_ = False
-    server_udp._running_ = False
-    server_tcp.close()
-    time.sleep(0.5)
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == 'logs':
+        (server, thread) = make_log_thread()
+        # Then wait for enter to be pressed before stopping
+        input("")
+        server._running_ = False
+        time.sleep(0.5)
+    else:
+        # construct a server
+        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
+        # Then wait for enter to be pressed before stopping
+        input("")
+        server_tcp._running_ = False
+        server_udp._running_ = False
+        server_tcp.close()
+        time.sleep(0.5)
