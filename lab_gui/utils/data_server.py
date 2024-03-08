@@ -7,8 +7,8 @@ import struct
 import os
 
 # Some standard message components
-DELIM = b':__:'
-DALIM = b'_::_'
+DELIM = b'\x1e\x1e'
+DALIM = b'\x1d\x1d'
 GET = b'get'
 SET = b'set'
 ALL = b'all'
@@ -112,13 +112,14 @@ class BaseDataServer:
             port_arg = args[1]
 
             if(port_arg[0] == b'x'[0]):
-                port = int(args[1][1:].decode())
+                port = int(args[1][1:].decode().replace('\x00', ''))
                 addr = (address[0], port)
                 for _, targets in callback_targets.items():
                     if addr in targets:
                         targets.remove(addr)
             else:
-                port = int(args[1].decode())
+                port = int(args[1].decode().replace('\x00', ''))
+                rate = int(args[2].decode().replace('\x00', '')) if len(args) > 2 else 100
                 targets = []
                 if key in callback_targets:
                     targets = callback_targets[key]
@@ -127,7 +128,7 @@ class BaseDataServer:
                 addr = (address[0], port)
                 if not addr in targets:
                     # print(f"New Callback: {key} {addr}")
-                    targets.append(addr)
+                    targets.append((addr, rate))
         except Exception as err:
             print(f"Error with callback set {err}")
         resp = CALLBACK_SUCCESS
@@ -235,7 +236,8 @@ class BaseDataServer:
                 to_log.append(value)
                 if key in callback_targets:
                     targets = callback_targets[key]
-                    for addr in targets:
+                    for addr, _ in targets:
+                        # TODO rate throttle the callbacks using _ above
                         connection = socket.socket()
                         connection.settimeout(0.1)
                         try:
@@ -497,10 +499,9 @@ class LogServer:
         return resp
 
     def read_loop(self):
-        conn, addr = self.connection.accept()  # accept new connection
+        conn, _ = self.connection.accept()  # accept new connection
         # receive data stream. it won't accept data packet greater than 4096 bytes
         data = conn.recv(4096).decode()
-        print(f"Request from {addr}:{data}")
         if not data:
             # if data is not received break
             conn.close()  # close the connection
@@ -538,7 +539,6 @@ class LogServer:
         conn.close()
 
     def run(self):
-        print("Starting log server thread")
         self._running_ = True
         while(self._running_):
             try:
