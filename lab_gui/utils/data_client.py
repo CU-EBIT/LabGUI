@@ -329,12 +329,15 @@ class DataCallbackServer:
                 if now - last_time > 10:
                     keys.append(key)
             if len(keys):
-                client = BaseDataClient(self.client_addr)
-                client.init_connection()
-                for key in keys:
-                    self.last_heard_times[key] = now
-                    client.register_callback_server(key, self.port)
-                client.close()
+                try:
+                    client = BaseDataClient(self.client_addr)
+                    client.init_connection()
+                    for key in keys:
+                        self.last_heard_times[key] = now
+                        client.register_callback_server(key, self.port)
+                    client.close()
+                except Exception as err:
+                    print(f"Error in check alive: {err}")
 
 class BaseDataClient:
     '''Python client implementation'''
