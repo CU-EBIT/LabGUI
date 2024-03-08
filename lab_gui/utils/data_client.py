@@ -133,8 +133,8 @@ def unpack_data(bytes):
     return var
 
 # Some standard message components
-DELIM = b':__:'
-DALIM = b'_::_'
+DELIM = b'\x1e\x1e'
+DALIM = b'\x1d\x1d'
 GET = b'get'
 SET = b'set'
 ALL = b'all'
@@ -164,11 +164,11 @@ _close_cmd = CLOSE + DELIM + FILLER + CLOSE
 # _hello = HELLO + DELIM + HELLO
 all_request = ALL + DELIM + FILLER + ALL
 
-def callback_request(key, port, closing=False):
+def callback_request(key, port, closing=False, rate = 100):
     if closing:
-        msg = key.encode() + DALIM + f'x{port}'.encode()
+        msg = f'{key}{DALIM.decode()}x{port}\0{DALIM.decode()}{rate}\0'.encode()
     else:
-        msg = key.encode() + DALIM + f'{port}'.encode()
+        msg = f'{key}{DALIM.decode()}{port}\0{DALIM.decode()}{rate}\0'.encode()
     s = len(msg)
     # We encode size in along with the message
     size = struct.pack("<bb", int(s&31), int(s>>5))
@@ -370,7 +370,7 @@ class BaseDataClient:
         if self.tcp:
             self.connection = socket.socket()
             self.connection.connect(self.addr)
-            self.connection.settimeout(0.1)
+            self.connection.settimeout(0.5)
         else:
             self.connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
             self.connection.settimeout(0.1)
@@ -410,7 +410,7 @@ class BaseDataClient:
             # this also closes the connection if it existed
             self.change_port(self.root_port)
             msgFromServer = self.send_msg(_open_cmd)
-            new_port = int(msgFromServer[0].decode("utf-8").replace("open:__:", "").replace("open_::_", ""))
+            new_port = int(msgFromServer[0].split(DALIM)[1].decode())
             self.change_port(new_port)
             return True
         except Exception as err:
