@@ -343,6 +343,7 @@ class BaseDataClient:
         self.connection = None
         self.tcp = True
         self.addr = addr
+        self.io_lock = False
         self.custom_port = -1
         self.root_port = addr[1]
         self.reads = {}
@@ -355,6 +356,14 @@ class BaseDataClient:
         if self.tcp and self.custom_port != -1:
             self.init_connection()
             self.close()
+
+    def lock(self):
+        while(self.io_lock):
+            time.sleep(0.001)
+        self.io_lock = True
+
+    def unlock(self):
+        self.io_lock = False
 
     def change_port(self, port):
         '''Changes the port we connect over'''
@@ -390,15 +399,20 @@ class BaseDataClient:
             callback_set = callback_request(key, port)
             if not port in self.cb_ports:
                 self.cb_ports.append(port)
-            self.send_msg(callback_set)
+            response = self.send_msg(callback_set)[0]
+            valid = f'callback{DALIM.decode()}success!'.encode()
+            if(response != valid):
+                print(f"Callback failed? {response}, {valid}")
         except Exception as err:
             print(f'error registering a callback? {err} for {key}')
 
     def send_msg(self, msg):
+        self.lock()
         if self.connection == None or self.tcp:
             self.init_connection()
         self.connection.sendto(msg, self.addr)
         msgFromServer = self.connection.recvfrom(BUFSIZE)
+        self.unlock()
         return msgFromServer
 
     def select(self):

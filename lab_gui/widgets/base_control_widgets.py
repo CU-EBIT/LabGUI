@@ -783,6 +783,7 @@ class SingleInputWidget(LineEdit):
 
         self.client = module.client
         self.key = key
+        register_tracked_key(key)
         self.fmt = fmt
         self.init_done = time.time()
         self.value = 0
@@ -818,7 +819,7 @@ class SingleInputWidget(LineEdit):
     def update_values(self):
         if self.init_done > time.time():
             return
-        var = self.client.get_value(self.key)
+        var = get_tracked_value(self.key)
         if var is not None:
             self.value = var[1]
             self.update_labels()
@@ -1029,9 +1030,6 @@ class TableDisplayWidget(QTableWidget):
                 if self.init:
                     register_tracked_key(key)
                 var = get_tracked_value(key)
-                if var is None:
-                    # Manually look it up initially if needed
-                    var = self.client.get_value(key)
                 val = None
                 if var is not None:
                     val = var
