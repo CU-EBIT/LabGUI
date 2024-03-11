@@ -671,10 +671,13 @@ class ControlButton(QPushButton):
         self.values = values
         self.colours = colours
         self.disabled = False
+        self.locked = False
         self.value = default_value
         if toggle is not None:
             old_tgl = self.toggle
             def wrapped():
+                if self.disabled or self.locked:
+                    return
                 old_tgl()
                 toggle()
             self.toggle = wrapped
@@ -716,13 +719,76 @@ class ControlButton(QPushButton):
         self.setFixedWidth(int(w))
 
     def toggle(self):
-        if self.disabled:
+        if self.disabled or self.locked:
             return
         new_value = self.values[1] if self.predicate(self.value) else self.values[0]
         if self.client is not None:
             self.client.set_value(self.key, new_value)
         self.value = new_value
         self.update_values()
+
+    def lock(self):
+        self.locked = True
+
+    def unlock(self):
+        self.locked = False
+
+class InterlockButton(QPushButton):
+    """
+    This button allows adding a series of buttons to try to keep locked. 
+    this calls the "lock" and "unlock" functions for the contents of the passed in buttons list
+
+    After unlock_dur, this button will automatically re-call the "lock" function.
+    """
+    def __init__(self, buttons:list, unlock_dur=10, on_lock = lambda self: self.setStyleSheet(f"background-color : {_red_}"), 
+                on_unlock = lambda self: self.setStyleSheet(f"background-color : {_green_}"), *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.unlock_time = 0
+        self.unlock_dur = unlock_dur
+
+        self.on_lock = on_lock
+        self.on_unlock = on_unlock
+
+        self.buttons = buttons
+        
+        self.lock()
+
+        def toggle():
+            if self.locked:
+                self.unlock()
+            else:
+                self.lock()
+
+        self.clicked.connect(toggle)
+
+    def lock(self):
+        self.locked = True
+        self.on_lock(self)
+        for button in self.buttons:
+            button.lock()
+
+    def unlock(self):
+        self.unlock_time = time.time()
+        self.locked = False
+        self.on_unlock(self)
+        for button in self.buttons:
+            button.unlock()
+
+    def get_dpi(self):
+        return widget_dpi(self)
+    
+    def update_values(self):
+        now = time.time()
+        if not self.locked and now > self.unlock_time + self.unlock_dur:
+            self.lock()
+
+    def set_button_sizes(self, w, h):
+        dpi_scale = scale(self.get_dpi())
+        h = int(h * dpi_scale)
+        self.setFixedHeight(int(h))
+        w = int(w * dpi_scale)
+        self.setFixedWidth(int(w))
 
 ###
 ### Widgets below here are all set to use the data_client and BaseDataClient for value set/lookup
