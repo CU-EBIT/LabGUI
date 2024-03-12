@@ -672,6 +672,7 @@ class ControlButton(QPushButton):
         self.colours = colours
         self.disabled = False
         self.locked = False
+        self.checked_lock_tooltip = False
         self.value = default_value
         if toggle is not None:
             old_tgl = self.toggle
@@ -728,9 +729,19 @@ class ControlButton(QPushButton):
         self.update_values()
 
     def lock(self):
+        if not self.checked_lock_tooltip:
+            self.hasTooltip = self.toolTip() != ''
+            self.checked_lock_tooltip = True
+        if not self.hasTooltip:
+            self.setToolTip("Locked")
         self.locked = True
 
     def unlock(self):
+        if not self.checked_lock_tooltip:
+            self.hasTooltip = self.toolTip() != ''
+            self.checked_lock_tooltip = True
+        if not self.hasTooltip:
+            self.setToolTip("")
         self.locked = False
 
 class InterlockButton(QPushButton):
@@ -740,8 +751,8 @@ class InterlockButton(QPushButton):
 
     After unlock_dur, this button will automatically re-call the "lock" function.
     """
-    def __init__(self, buttons:list, unlock_dur=10, on_lock = lambda self: self.setStyleSheet(f"background-color : {_red_}"), 
-                on_unlock = lambda self: self.setStyleSheet(f"background-color : {_green_}"), *args, **kwargs):
+    def __init__(self, buttons:list, unlock_dur=10, on_lock = lambda self: self.set_locked_texture(), 
+                on_unlock = lambda self: self.set_unlocked_texture(), *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.unlock_time = 0
@@ -761,6 +772,16 @@ class InterlockButton(QPushButton):
                 self.lock()
 
         self.clicked.connect(toggle)
+
+    def set_locked_texture(self):
+        icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
+        self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
+        self.setStyleSheet(f"background-color : {_red_}")
+
+    def set_unlocked_texture(self):
+        icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
+        self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
+        self.setStyleSheet(f"background-color : {_green_}")
 
     def lock(self):
         self.locked = True
