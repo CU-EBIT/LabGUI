@@ -1,5 +1,6 @@
 import numpy
 import json
+import zlib
 
 import socket
 from datetime import datetime
@@ -68,11 +69,13 @@ def get_value_log(key, all=True, start=1, end=0, last=None):
         return False, []
 
     # If we got b'error!', then it wasn't a valid response
+    packet = zlib.decompress(packet)
     valid = packet != b'error!'
     values = []
     if valid:
         # Otherwise we got some json to unpack values from
         values = json.loads(packet.decode())
+        # values = pickle.loads(packet)
         valid = len(values) > 0
     return valid, values
 
@@ -157,19 +160,36 @@ def roll_plot_values(plots, value, timestamp):
     plots[1] = values
     plots[2] = avgs
 
-def get_values(client, first:bool, key:str):
+def get_values(first:bool, key:str):
     '''This updates the values in _plots for key, it will also try to pre-fill with existing values if first is true'''
+
+    if can_access_logs():
+        try:
+            # Try pre-filling array
+            # Only pre-fill if on the real address, and on first run
+            if first:
+                pre_fill(key, _preload_hours, 0)
+            else:
+                plots = _plots[key]
+                times = plots[0]
+                last_stamp = times[-1]
+                
+                # First get the all array, up to preload hours
+                valid, array = get_value_log(key, all=False, last=last_stamp)
+                if not valid:
+                    print(f"Not valid for {key}")
+                    return
+                for (time, value) in array:
+                    time = parser.parse(time).timestamp()
+                    if time == last_stamp:
+                        continue
+                    roll_plot_values(plots, value, time)
+            return
+        except Exception as err:
+            print(f'Value Prefill Error {err}')
+
     if first:
         register_tracked_key(key)
-
-    try:
-        # Try pre-filling array
-        # Only pre-fill if on the real address, and on first run
-        if first and can_access_logs():
-            pre_fill(key, _preload_hours, 0)
-    except Exception as err:
-        print(f'Value Prefill Error {err}')
-
     # Now try filling new value in
     
     plots = _plots[key]
@@ -181,13 +201,13 @@ def get_values(client, first:bool, key:str):
     timestamp = read[0].timestamp()
     value = read[1]
     # Otherwise, only add if the timestamp has changed
-    if read[0].timestamp() != times[-1]:
+    if timestamp != times[-1]:
         roll_plot_values(plots, value, timestamp)
 
 __threads__ = {} # Cache of threads to prevent the GC from eating them
 __update_rate_ = 2.5e-1
 
-def run_plot_thread(client, key):
+def run_plot_thread(key):
     if key in __threads__:
         return
     cache = [None, True, time.time()]
@@ -206,7 +226,7 @@ def run_plot_thread(client, key):
         lastTime = perf_counter()
         n = 0
         while cache[1]:
-            get_values(client, first, key)
+            get_values(first, key)
             first = False
             now = perf_counter()
             dt = now - lastTime
@@ -579,7 +599,7 @@ class Plot(QWidget):
         try:
             for (key,_,_) in self.keys:
                 if key not in __threads__:
-                    run_plot_thread(self.client, key)
+                    run_plot_thread(key)
                     continue
                 if key not in _plots:
                     continue
