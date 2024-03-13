@@ -509,7 +509,7 @@ class LogServer:
         resps.append(b'\0\0end\0\0')
         return resps
     
-    def update_values(self, key, last_point=None):
+    def update_values(self, key, last_point=None, end=None):
         import datetime
         import json
         from dateutil import parser
@@ -527,7 +527,19 @@ class LogServer:
             return b'error!'
         
         now = time.time()
-        end = now + 1e6
+        if end is None:
+            end = now + 1e6
+        else:
+            try:
+                _time = float(end)
+                end = _time
+            except:
+                pass
+            if isinstance(end, float):
+                end = end
+            else:
+                end = parser.parse(end).timestamp()
+        
         start = now - 3600
         if last_point is not None:
             try:
@@ -603,9 +615,12 @@ class LogServer:
                     conn.send(resp)
             elif cmd == 'update':
                 last_point = None
+                end = None
                 if len(data) > 2:
                     last_point = data[2]
-                resp = self.update_values(key, last_point)
+                if len(data) > 3:
+                    end = data[3]
+                resp = self.update_values(key, last_point, end)
                 for resp in self.split(resp):
                     conn.send(resp)
             else:
