@@ -285,7 +285,7 @@ class Module:
         if self._help_main:
             help_fn = self.open_help
 
-        self._dock = FrameDock(self.name, closable=True,menu_fn=menu_fn,help_fn=help_fn)
+        self._dock = FrameDock(self.name, closable=True, menu_fn=menu_fn, help_fn=help_fn)
         
         self._dock.setStyleSheet(getGlobalStyleSheet())
         widget = QWidget()
@@ -337,6 +337,7 @@ class Module:
             self.saver.close()
 
     def dock_closed(self, *_):
+        print("Dock Closed", self)
         self.on_stop()
         self._dock = None
         self._layout = None
@@ -430,14 +431,13 @@ class FigureModule(Module):
 
     def on_stop(self):
         super().on_stop()
-        if self._stopped:
-            return
         self.active = False
         if self.plot_widget is not None:
             self.plot_widget.close()
             self.plot_widget = None
         if self._timer is not None:
             self._timer.stop()
+            self._timer = None
         self._stopped = True
         self.clear_fig()
 
@@ -455,8 +455,9 @@ class FigureModule(Module):
         return self._plot_layout
     
     def clear_fig(self):
-        self.delete_layout(self._plot_layout)
-        self._plot_layout = None
+        if self._plot_layout is not None:
+            self.delete_layout(self._plot_layout)
+            self._plot_layout = None
 
     # Displays the matplotlib figure fig in the main window
     def show_fig(self):
