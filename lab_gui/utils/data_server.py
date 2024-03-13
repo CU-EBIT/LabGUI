@@ -46,15 +46,7 @@ class BaseDataServer:
 
     values = {}
     pending_save = {}
-    save_lock = False
-
-    def lock_save():
-        while BaseDataServer.save_lock:
-            time.sleep(0.00001)
-        BaseDataServer.save_lock = True
-
-    def unlock_save():
-        BaseDataServer.save_lock = False
+    save_lock = threading.Lock()
 
     def __init__(self, addr=ADDR, tcp=False) -> None:
         self.tcp = tcp
@@ -227,12 +219,12 @@ class BaseDataServer:
 
                 BaseDataServer.values[key] = value
                 to_log = []
-                BaseDataServer.lock_save()
-                if key in BaseDataServer.pending_save:
-                    to_log = BaseDataServer.pending_save[key]
-                else:
-                    BaseDataServer.pending_save[key] = to_log
-                BaseDataServer.unlock_save()
+                with BaseDataServer.save_lock:
+                    if key in BaseDataServer.pending_save:
+                        to_log = BaseDataServer.pending_save[key]
+                    else:
+                        BaseDataServer.pending_save[key] = to_log
+                
                 to_log.append(value)
                 if key in callback_targets:
                     targets = callback_targets[key]
@@ -317,7 +309,7 @@ class BaseDataServer:
 class DataSaver:
 
     def __init__(self) -> None:
-        self.save_delay = 1
+        self.save_delay = 0.25
         self._running_ = False
         if not os.path.exists(SAVE_DIR):
             os.makedirs(SAVE_DIR)
@@ -329,30 +321,29 @@ class DataSaver:
         while self._running_:
             time.sleep(self.save_delay)
             values = []
-            BaseDataServer.lock_save()
-            for key, values in BaseDataServer.pending_save.items():
-                if not len(values):
-                    continue
-                key = key.decode()
-                filename = SAVE_DIR + key + ".dat"
-                try:
-                    file = open(filename, 'ab')
-                    while(len(values)):
-                        value = values.pop(0)
-                        file.write(value)
-                    file.close()
-                    file_stats = os.stat(filename)
-                    if file_stats.st_size > MAX_FILESIZE:
-                        filename_bak = BACK_DIR + key + ".dat"
-                        print("Moving file ", filename, filename_bak)
-                        if os.path.exists(filename_bak):
-                            os.replace(filename, filename_bak)
-                        else:
-                            os.rename(filename, filename_bak)
-                        os.remove(filename)
-                except:
-                    pass
-            BaseDataServer.unlock_save()
+            with BaseDataServer.save_lock:
+                for key, values in BaseDataServer.pending_save.items():
+                    if not len(values):
+                        continue
+                    key = key.decode()
+                    filename = SAVE_DIR + key + ".dat"
+                    try:
+                        file = open(filename, 'ab')
+                        while(len(values)):
+                            value = values.pop(0)
+                            file.write(value)
+                        file.close()
+                        file_stats = os.stat(filename)
+                        if file_stats.st_size > MAX_FILESIZE:
+                            filename_bak = BACK_DIR + key + ".dat"
+                            print("Moving file ", filename, filename_bak)
+                            if os.path.exists(filename_bak):
+                                os.replace(filename, filename_bak)
+                            else:
+                                os.rename(filename, filename_bak)
+                            os.remove(filename)
+                    except:
+                        pass
 
     def make_thread(self):
         '''Makes a daemon thread that runs our run loop when started'''
