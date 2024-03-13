@@ -337,7 +337,6 @@ class Module:
             self.saver.close()
 
     def dock_closed(self, *_):
-        print("Dock Closed", self)
         self.on_stop()
         self._dock = None
         self._layout = None
