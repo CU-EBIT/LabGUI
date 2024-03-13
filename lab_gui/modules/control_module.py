@@ -59,8 +59,6 @@ class MainModule(FigureModule):
         self.init_menu_naming(menu_name="Modules", key="open_control_module", name="Control Module", help="Opens Control Module")
 
     def on_stop(self):
-        if self._stopped:
-            return
         for mod in self._modules:
             mod.close()
         self._modules.clear()
