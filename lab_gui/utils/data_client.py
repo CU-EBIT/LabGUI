@@ -252,7 +252,6 @@ class ServerFinder:
     def __init__(self, server_type = 'tcp', server_key = 'default', target_port=None) -> None:
         if target_port is None:
             target_port = ServerFinder.PORT
-        print(target_port)
         self.connection = socket.socket()
         self.connection.bind(("0.0.0.0", 0))
         self.port = self.connection.getsockname()[1]
