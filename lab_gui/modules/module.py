@@ -565,28 +565,36 @@ access_lock = False
 
 def update_values():
     global local_server
-    
     from ..widgets import base_control_widgets
-    if data_client.ADDR == None and local_server == None:
+    if local_server is None:
         from ..utils import data_server as server
         import time
-        from ..utils.data_client import HELLO, DELIM
-        _hello = HELLO + DELIM + HELLO
-        # Check for a server already running
-        try:
-            addr = server.ADDR
-            if addr[0] == "0.0.0.0":
-                addr = ("127.0.0.1", server.ADDR[1])
-            client = data_client.BaseDataClient(addr)
-            client.send_msg(_hello)
-        except Exception:
+        found = False
+
+        if data_client.DATA_SERVER_KEY is None:
+            data_client.DATA_SERVER_KEY = "LabGUI"
+
+        if data_client.DATA_SERVER_KEY is not None:
+            data_client.ADDR = data_client.find_server(data_client.DATA_SERVER_KEY, 'tcp', default_addr=None)
+            data_client.DATA_LOG_HOST = data_client.find_server(data_client.DATA_SERVER_KEY, 'log', default_addr=None)
+            if data_client.ADDR is not None:
+                found = True
+
+        if not found:
             print("Making Server!")
             (server_tcp, _), (server_udp, _), (saver, _) = server.make_server_threads()
             (server_logs, _) = server.make_log_thread()
-            data_client.DATA_LOG_HOST = ("127.0.0.1", server_logs.addr[1])
+            server.ServerProvider.server_key = data_client.DATA_SERVER_KEY
+            # Now start the provider thread who says where the server is
+            server.BaseDataServer.provider_thread.start()
             time.sleep(0.5)
             local_server = (server_tcp, server_udp, saver, server_logs)
-        data_client.ADDR = ("127.0.0.1", server.ADDR[1])
+            data_client.ADDR = data_client.find_server(data_client.DATA_SERVER_KEY, 'tcp', default_addr=None)
+            data_client.DATA_LOG_HOST = data_client.find_server(data_client.DATA_SERVER_KEY, 'log', default_addr=None)
+            print(data_client.ADDR)
+        else:
+            local_server = False
+
     base_control_widgets.callbacks = ValueListener(data_client.ADDR)
 
 class ClientWrapper(BaseDataClient):

@@ -37,9 +37,65 @@ HELLO_FROM_SERVER = HELLO + DALIM + HELLO
 CLOSED = SUCCESS + DALIM + CLOSE
 CALLBACK_SUCCESS = CALLBACK + DALIM + SUCCESS
 
-ADDR = ("0.0.0.0", 30002)
-LOG_ADDR = ("0.0.0.0", 31002)
+ADDR = ("0.0.0.0", 0)
+LOG_ADDR = ("0.0.0.0", 0)
 callback_targets = {}
+
+class ServerProvider:
+    PORT = 30001
+    server_key = "default"
+
+    def __init__(self) -> None:
+        self._running_ = False
+
+        self.server_tcp = None
+        self.server_udp = None
+        self.server_log = None
+
+    def start(self):
+        self.addr = ("0.0.0.0", ServerProvider.PORT)
+        self.connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.connection.bind(self.addr)
+        self.port = self.connection.getsockname()[1]
+
+    def run(self):
+        UDP_REQ = GET + DALIM + b'udp' + DELIM + ServerProvider.server_key.encode() + DELIM
+        TCP_REQ = GET + DALIM + b'tcp' + DELIM + ServerProvider.server_key.encode() + DELIM
+        LOG_REQ = GET + DALIM + b'log' + DELIM + ServerProvider.server_key.encode() + DELIM
+
+        head_len = len(UDP_REQ)
+
+        self._running_ = True
+        self.start()
+        while self._running_:
+            data, addr = self.connection.recvfrom(1024)
+            if len(data) < head_len:
+                continue
+            try:
+                header = data[0:head_len]
+                msg = b''
+                port = int(data[head_len:].decode())
+                if header == UDP_REQ and self.server_udp != None:
+                    msg =  ServerProvider.server_key.encode() + DALIM + str(self.server_udp.port).encode()
+                elif header == TCP_REQ and self.server_tcp != None:
+                    msg =  ServerProvider.server_key.encode() + DALIM + str(self.server_tcp.port).encode()
+                elif header == LOG_REQ and self.server_log != None:
+                    msg =  ServerProvider.server_key.encode() + DALIM + str(self.server_log.port).encode()
+                else:
+                    msg = b'err'
+                if msg != b'' and port != -1:
+                    connection = socket.socket()
+                    addr = (addr[0], port)
+                    print(f"Sending: {msg} to {addr}")
+                    connection.connect(addr)
+                    connection.settimeout(0.5)
+                    connection.sendto(msg, addr)
+                    connection.shutdown(socket.SHUT_RDWR)
+                    connection.close()
+            except Exception as err:
+                print(f"Error reading request: {err}")
 
 class BaseDataServer:
     '''Python server implementation'''
@@ -47,19 +103,27 @@ class BaseDataServer:
     values = {}
     pending_save = {}
     save_lock = threading.Lock()
+    provider_server = ServerProvider()
+    provider_thread = threading.Thread(target=provider_server.run, daemon=True)
 
     def __init__(self, addr=ADDR, tcp=False) -> None:
         self.tcp = tcp
-        self.addr = addr
         
         if self.tcp:
             self.connection = socket.socket()
             self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.connection.bind(addr)
+            self.port = self.connection.getsockname()[1]
+            addr = (addr[0], self.port)
             self.connection.listen(256)
         else:
             self.connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
             self.connection.bind(addr)
+            self.port = self.connection.getsockname()[1]
+            addr = (addr[0], self.port)
+
+        self.addr = addr
+    
         self._running_ = False
 
         self.cb_timeouts = {}
@@ -93,7 +157,7 @@ class BaseDataServer:
     def run(self):
         '''run loop entry point for the server, probably best to run via a separate thread'''
         self._running_ = True
-        print('Starting Data Server!')
+        print(f'Starting Data Server! {self.port}')
         while(self._running_):
             self.run_loop()
 
@@ -304,6 +368,10 @@ class BaseDataServer:
     def make_thread(self):
         '''Makes a daemon thread that runs our run loop when started'''
         thread = threading.Thread(target=self.run, daemon=True)
+        if self.tcp:
+            BaseDataServer.provider_server.server_tcp = self
+        else:
+            BaseDataServer.provider_server.server_udp = self
         return thread
     
 class DataSaver:
@@ -492,6 +560,7 @@ class LogServer:
         self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.connection.bind(addr)
         self.connection.listen(256)
+        self.port = self.connection.getsockname()[1]
         self._running_ = False
         self.log_lock = threading.Lock()
         self.logs = {}
@@ -655,6 +724,7 @@ class LogServer:
 
     def run(self):
         self._running_ = True
+        print(f'Starting Log Server! {self.port}')
         while(self._running_):
             try:
                 self.read_loop()
@@ -666,9 +736,11 @@ class LogServer:
         thread = threading.Thread(target=self.run, daemon=True)
         self.thread_2 = threading.Thread(target=self.log_monitor_loop, daemon=True)
         self.thread_2.start()
+        
+        BaseDataServer.provider_server.server_log = self
         return thread
 
-def make_server_threads(addr_tcp=("0.0.0.0", 30002), addr_udp=("0.0.0.0", 20002)):
+def make_server_threads(addr_tcp=("0.0.0.0", 0), addr_udp=("0.0.0.0", 0)):
     server_tcp = BaseDataServer(tcp=True, addr=addr_tcp)
     server_udp = BaseDataServer(tcp=False, addr=addr_udp)
     saver = DataSaver()
@@ -684,7 +756,7 @@ def make_server_threads(addr_tcp=("0.0.0.0", 30002), addr_udp=("0.0.0.0", 20002)
 
     return (server_tcp, thread_tcp), (server_udp, thread_udp), (saver, save_thread)
 
-def make_log_thread(addr=("0.0.0.0", 31002)):
+def make_log_thread(addr=("0.0.0.0", 0)):
     server = LogServer(addr)
     thread = server.make_thread()
     thread.start()
@@ -694,13 +766,33 @@ if __name__ == "__main__":
     import sys
     if len(sys.argv) > 1 and sys.argv[1] == 'logs':
         (server, thread) = make_log_thread()
+        if len(sys.argv) > 2:
+            ServerProvider.server_key = sys.argv[2]
+        # Now start the provider thread who says where the server is
+        if ServerProvider.server_key != "None":
+            BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
         server._running_ = False
         time.sleep(0.5)
+    elif len(sys.argv) > 1 and sys.argv[1] == 'tests':
+        ServerProvider.server_key = 'local_test'
+        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
+        (server, thread) = make_log_thread()
+        # Now start the provider thread who says where the server is
+        BaseDataServer.provider_thread.start()
+        # Then wait for enter to be pressed before stopping
+        input("")
+        server_tcp._running_ = False
+        server_udp._running_ = False
+        server._running_ = False
+        server_tcp.close()
+        time.sleep(0.5)
     else:
         # construct a server
         (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
+        # Now start the provider thread who says where the server is
+        BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
         server_tcp._running_ = False

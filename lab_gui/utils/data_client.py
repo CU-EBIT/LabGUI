@@ -14,6 +14,8 @@ ADDR = None
 # Tuple of (address, port) for log access
 DATA_LOG_HOST = None
 
+DATA_SERVER_KEY = None
+
 class DoubleValue:
     '''Implementation of a value containing a 64 bit floating point number'''
     def __init__(self) -> None:
@@ -236,15 +238,62 @@ def set_msg(key, timestamp, value):
     msg = SET + DELIM + size + packed
     return msg
 
-
 def get_msg(key):
     '''Packs key for a get query'''
     # Server doesn't presently use the size bytes here, hence FILLER
     return GET + DELIM + FILLER + str.encode(key)
 
+def find_server(server_key, server_type='tcp', default_addr=ADDR):
+    finder = ServerFinder(server_type=server_type, server_key=server_key)
+    return finder.get_addr(default_addr)
+
+class ServerFinder:
+    PORT = 30001
+    def __init__(self, server_type = 'tcp', server_key = 'default', target_port=None) -> None:
+        if target_port is None:
+            target_port = ServerFinder.PORT
+        print(target_port)
+        self.connection = socket.socket()
+        self.connection.bind(("0.0.0.0", 0))
+        self.port = self.connection.getsockname()[1]
+        self.connection.listen(1)
+        self.connection.settimeout(0.5)
+        port = self.connection.getsockname()[1]
+        self.addr = None
+
+        msg = f'{GET.decode()}{DALIM.decode()}{server_type}{DELIM.decode()}{server_key}{DELIM.decode()}{port}'.encode()
+
+        # From stack overflow
+        interfaces = socket.getaddrinfo(host=socket.gethostname(), port=None, family=socket.AF_INET)
+        allips = [ip[-1][0] for ip in interfaces]
+        for ip in allips:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)  # UDP
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            sock.bind((ip,0))
+            sock.sendto(msg, ("255.255.255.255", target_port))
+            sock.close()
+            try:
+                conn, addr = self.connection.accept()
+                self.message = conn.recv(BUFSIZE)
+                args = self.message.split(DALIM)
+                if args[0].decode() == server_key:
+                    _ip = addr[0]
+                    if ip == _ip:
+                        _ip = '127.0.0.1'
+                    self.addr = (_ip, int(args[1].decode()))
+                break
+            except:
+                pass
+        self.connection.close()
+
+    def get_addr(self, default):
+        return default if self.addr is None else self.addr
+
 class DataCallbackServer:
-    def __init__(self, port = 0, client_addr=ADDR) -> None:
+    def __init__(self, port = 0, client_addr = None) -> None:
         '''addr is address/port tuple, custom_port would call select() if true'''
+        if client_addr is None:
+            client_addr = ADDR
         self.connection = None
         self.addr = ("0.0.0.0", port)
         self.client_addr = client_addr
@@ -269,7 +318,13 @@ class DataCallbackServer:
     def close(self):
         
         try:
-            client = BaseDataClient(self.client_addr)
+            if DATA_SERVER_KEY is not None:
+                finder = ServerFinder('tcp', DATA_SERVER_KEY)
+                addr = finder.addr
+            else:
+                addr = self.client_addr
+
+            client = BaseDataClient(addr)
             client.init_connection()
             callback_set = callback_request("???", self.port, closing=True)
             client.send_msg(callback_set)
@@ -330,7 +385,12 @@ class DataCallbackServer:
                     keys.append(key)
             if len(keys):
                 try:
-                    client = BaseDataClient(self.client_addr)
+                    if DATA_SERVER_KEY is not None:
+                        finder = ServerFinder('tcp', DATA_SERVER_KEY)
+                        addr = finder.addr
+                    else:
+                        addr = self.client_addr
+                    client = BaseDataClient(addr)
                     client.init_connection()
                     for key in keys:
                         self.last_heard_times[key] = now
@@ -341,18 +401,20 @@ class DataCallbackServer:
 
 class BaseDataClient:
     '''Python client implementation'''
-    def __init__(self, addr=ADDR, custom_port=False) -> None:
+    def __init__(self, addr=None, custom_port=False) -> None:
         '''addr is address/port tuple, custom_port would call select() if true'''
+        if addr is None:
+            addr = ADDR
         self.connection = None
         self.tcp = True
         self.addr = addr
         self.io_lock = False
         self.custom_port = -1
-        self.root_port = addr[1]
+        self.root_port = addr[1] if addr is not None else -1
         self.reads = {}
         self.values = {}
         self.cb_ports = []
-        if custom_port:
+        if custom_port and addr is not None:
             self.select()
 
     def __del__(self):
@@ -375,10 +437,18 @@ class BaseDataClient:
         if port != self.root_port:
             self.custom_port = port
 
-    def init_connection(self):
+    def init_connection(self, on_fail=False):
         '''Starts a new connection, closes existing one if present.'''
+        
+        if self.addr is None:
+            if DATA_SERVER_KEY is None:
+                return
+            self.addr = find_server(DATA_SERVER_KEY, 'tcp' if self.tcp else 'udp')
+        if self.addr is None:
+            return
+        
         if self.connection is not None:
-            self.close()
+            self.close(on_fail)
         if self.tcp:
             self.connection = socket.socket()
             self.connection.connect(self.addr)
@@ -387,7 +457,7 @@ class BaseDataClient:
             self.connection = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
             self.connection.settimeout(0.1)
 
-    def close(self):
+    def close(self, on_fail=False):
         if self.connection is not None:
             try:
                 if self.addr[1] != self.root_port:
@@ -396,6 +466,10 @@ class BaseDataClient:
                 self.connection = None
             except Exception as err:
                 print(f'error closing? {err}')
+        if on_fail and DATA_SERVER_KEY is not None:
+            self.addr = find_server(DATA_SERVER_KEY, 'tcp' if self.tcp else 'udp')
+            if self.addr is not None:
+                self.root_port = self.addr[1]
     
     def register_callback_server(self, key, port):
         try:
@@ -431,7 +505,8 @@ class BaseDataClient:
             self.change_port(new_port)
             return True
         except Exception as err:
-            print(f'error selecting? {err}')
+            print(f'error selecting? {err}, {self.addr}, {self.root_port}')
+            self.close(True)
             pass
         return False
 
@@ -459,6 +534,7 @@ class BaseDataClient:
                 # Timeouts can happen, so only print ones that did not
                 if DEBUG and not 'timed out' in msg:
                     print(msg)
+                self.close(True)
                 return None
         else:
             _key = key
@@ -497,6 +573,7 @@ class BaseDataClient:
                     # Timeouts can happen, so only print ones that did not
                     if DEBUG and not 'timed out' in msg:
                         print(msg)
+                    self.close(True)
                     pass
         if DEBUG:
             print(f'failed to get! {key} {unpacked}')
@@ -573,7 +650,9 @@ class BaseDataClient:
             # And see if the server responded appropriately
             if self.check_set(key, msgFromServer[0]):
                 return True
-        except:
+        except Exception as err:
+            print(f"Error on set: {err}")
+            self.close(True)
             pass
         return False
 
@@ -619,4 +698,15 @@ class BaseDataClient:
                     done = True
                 elif DEBUG:
                     print(_msg)
+                self.close(True)
         return self.values
+    
+if __name__ == "__main__":
+    finder = ServerFinder('tcp')
+    addr_tcp = finder.addr
+    finder = ServerFinder('udp')
+    addr_udp = finder.addr
+    finder = ServerFinder('log')
+    addr_log = finder.addr
+
+    print(addr_tcp, addr_udp, addr_log)

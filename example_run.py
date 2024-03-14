@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 
-### If running a server manually, uncomment below and replace this ADDR accordingly
-# import utils.data_client as data_client
-# data_client.ADDR = ("host", 30002) 
+### If running a server manually, replace the key below with the one your server uses
+import lab_gui.utils.data_client as data_client
+data_client.DATA_SERVER_KEY = "LabGUI"
+### If you have multiple servers running, change the lookup port as follows:
+import lab_gui.utils.data_server as server
+server.ServerProvider.PORT = 1234
+data_client.ServerFinder.PORT = server.ServerProvider.PORT
 
 def make_modules(main):
     """Here we add a few of our own modules.
