@@ -132,6 +132,10 @@ class KE2400(DeviceReader):
                 _, V_0 = get_tracked_value(self.v_0_key)
                 _, V_1 = get_tracked_value(self.v_1_key)
                 _, N = get_tracked_value(self.measure_n)
+
+                DIR = 'UP' if V_1 > V_0 else 'DOWN'
+                if DIR == 'DOWN':
+                    V_1, V_0 = V_0, V_1
                 
                 MAX_T = 30
                 ARM_T = 0.01
@@ -156,7 +160,7 @@ class KE2400(DeviceReader):
                 # Number of points
                 cmd = cmd + f':SOUR:SWE:POIN {N};'.encode()
                 # Sweep upwards
-                cmd = cmd + b':SOUR:SWE:DIR UP;'
+                cmd = cmd + f':SOUR:SWE:DIR {DIR};'.encode()
                 # Linear spacing
                 cmd = cmd + b':SOUR:SWE:SPAC LIN;'
                 # Add termination character
