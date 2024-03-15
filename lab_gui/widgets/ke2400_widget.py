@@ -33,7 +33,7 @@ class KE2400(DeviceReader):
         self.client.set_float(self.i_cmpl_key, 1e-1)
         self.client.set_float(self.v_0_key, -10)
         self.client.set_float(self.v_1_key, 10)
-        self.client.set_int(self.measure_n, 100)
+        self.client.set_float(self.measure_n, 100)
 
         # Time domain controls
         time_outer = QVBoxLayout()
@@ -229,7 +229,7 @@ class KE2400(DeviceReader):
                         S_arr.append(float(resp[i + 4]))
 
                     V_arr = numpy.array(V_arr)
-                    I_arr = numpy.array(V_arr)
+                    I_arr = numpy.array(I_arr)
                     self.plot_data = [V_arr, I_arr, I_arr, True, 0]
                 except Exception as err:
                     print(len(resp), resp)
