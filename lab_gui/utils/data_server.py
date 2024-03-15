@@ -76,13 +76,16 @@ class ServerProvider:
             try:
                 header = data[0:head_len]
                 msg = b''
-                port = int(data[head_len:].decode())
+                port = -1
                 if header == UDP_REQ and self.server_udp != None:
                     msg =  ServerProvider.server_key.encode() + DALIM + str(self.server_udp.port).encode()
+                    port = int(data[head_len:].decode())
                 elif header == TCP_REQ and self.server_tcp != None:
                     msg =  ServerProvider.server_key.encode() + DALIM + str(self.server_tcp.port).encode()
+                    port = int(data[head_len:].decode())
                 elif header == LOG_REQ and self.server_log != None:
                     msg =  ServerProvider.server_key.encode() + DALIM + str(self.server_log.port).encode()
+                    port = int(data[head_len:].decode())
                 else:
                     msg = b'err'
                 if msg != b'' and port != -1:
@@ -292,7 +295,8 @@ class BaseDataServer:
                 to_log.append(value)
                 if key in callback_targets:
                     targets = callback_targets[key]
-                    for addr, _ in targets:
+                    for pair in targets:
+                        addr, _ = pair
                         # TODO rate throttle the callbacks using _ above
                         connection = socket.socket()
                         connection.settimeout(0.1)
@@ -309,14 +313,14 @@ class BaseDataServer:
                                 self.cb_timeouts[addr] = 1
                             if self.cb_timeouts[addr] > 10:
                                 print(f"Removing {addr} due to timeout")
-                                targets.remove(addr)
+                                targets.remove(pair)
                                 for key2, list in callback_targets.items():
                                     if key != key2 and addr in list:
                                         list.remove(addr)
                         except Exception as err:
                             # Other errors we can remove the client.
                             print(f"Removing {addr} due to error {err}")
-                            targets.remove(addr)
+                            targets.remove(pair)
                             for key2, list in callback_targets.items():
                                 if key != key2 and addr in list:
                                     list.remove(addr)
@@ -554,6 +558,10 @@ class LogLoader:
 
 class LogServer:
 
+    HEADER = b'\0\0start\0\0'
+    FOOTER = b'\0\0end\0\0'
+    MAX_PACKET_SIZE = 32768
+
     def __init__(self, addr=LOG_ADDR) -> None:
         self.addr = addr
         self.connection = socket.socket()
@@ -569,13 +577,15 @@ class LogServer:
         import zlib
         resp = zlib.compress(resp)
         resps = []
-        resps.append(b'\0\0start\0\0')
-        while len(resp) > 4078:
-            split = resp[0:4078]
-            resp = resp[4078:]
+        PADDED_SIZE = LogServer.MAX_PACKET_SIZE - (len(LogServer.HEADER) + len(LogServer.FOOTER))
+        resps.append(LogServer.HEADER)
+        while len(resp) > PADDED_SIZE:
+            split = resp[0:PADDED_SIZE]
+            resp = resp[PADDED_SIZE:]
             resps.append(split)
-        resps.append(resp)
-        resps.append(b'\0\0end\0\0')
+        if len(resp) > 0:
+            resps.append(resp)
+        resps.append(LogServer.FOOTER)
         return resps
     
     def update_values(self, key, last_point=None, end=None):
@@ -659,7 +669,7 @@ class LogServer:
     def read_loop(self):
         conn, _ = self.connection.accept()  # accept new connection
         # receive data stream. it won't accept data packet greater than 4096 bytes
-        data = conn.recv(4096).decode()
+        data = conn.recv(LogServer.MAX_PACKET_SIZE).decode()
         if not data:
             # if data is not received break
             conn.close()  # close the connection
