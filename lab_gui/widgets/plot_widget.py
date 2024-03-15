@@ -20,6 +20,8 @@ from ..utils import data_client
 from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
 from .base_control_widgets import register_tracked_key, get_tracked_value
 
+MAX_PACKET_SIZE = 32768
+
 def can_access_logs():
     return data_client.DATA_LOG_HOST != None
 
@@ -54,10 +56,10 @@ def get_value_log(key, all=True, start=1, end=0, last=None):
         client_socket.send(message.encode())
         
         read = b'' # Build the response, by combining recv calls
-        data = client_socket.recv(4096)  # receive response
+        data = client_socket.recv(MAX_PACKET_SIZE)  # receive response
         while data:
             read += data
-            data = client_socket.recv(4096)  # receive response
+            data = client_socket.recv(MAX_PACKET_SIZE)  # receive response
         packet = read
         # If we are a combined packet, we have these as header and footer
         if len(read) > 10 and read[0:9] == b'\0\0start\0\0' and read[-7:] == b'\0\0end\0\0':
