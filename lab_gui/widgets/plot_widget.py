@@ -16,16 +16,15 @@ import pyqtgraph as pg
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
 from ..utils import data_client
+from ..utils.data_server import LogServer
 
 from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
 from .base_control_widgets import register_tracked_key, get_tracked_value
 
-MAX_PACKET_SIZE = 32768
-
 def can_access_logs():
     return data_client.DATA_LOG_HOST != None
 
-def get_value_log(key, all=True, start=1, end=0, last=None):
+def get_value_log(key, start=1, end=0, since=None, until=None):
     '''
     This asks the Logging computer for the log of values for the given key.
 
@@ -44,26 +43,24 @@ def get_value_log(key, all=True, start=1, end=0, last=None):
         client_socket.connect(data_client.DATA_LOG_HOST)# connect to the server
 
         # Assemble message based on parameters
-        if all:
-            message = f'all\x00{key}\x00{start}\x00{end}'
-        else:
-            if last is not None:
-                message = f'update\x00{key}\x00{last}'
-            else:
-                message = f'update\x00{key}'
+        message = LogServer.make_request_message(key, start, end, since, until)
 
         # Send message to server
         client_socket.send(message.encode())
         
         read = b'' # Build the response, by combining recv calls
-        data = client_socket.recv(MAX_PACKET_SIZE)  # receive response
+        data = client_socket.recv(LogServer.MAX_PACKET_SIZE)  # receive response
         while data:
             read += data
-            data = client_socket.recv(MAX_PACKET_SIZE)  # receive response
+            data = client_socket.recv(LogServer.MAX_PACKET_SIZE)  # receive response
         packet = read
         # If we are a combined packet, we have these as header and footer
-        if len(read) > 10 and read[0:9] == b'\0\0start\0\0' and read[-7:] == b'\0\0end\0\0':
-            packet = read[9:-7]
+        s = read.index(LogServer.HEADER)
+        e = read.index(LogServer.FOOTER)
+        if s >= 0 and e >= 0:
+            packet = read[s + len(LogServer.HEADER):e]
+        else:
+            packet = b'error!'
 
         client_socket.close()  # close the connection
     except Exception as err:
@@ -71,10 +68,10 @@ def get_value_log(key, all=True, start=1, end=0, last=None):
         return False, []
 
     # If we got b'error!', then it wasn't a valid response
-    packet = zlib.decompress(packet)
     valid = packet != b'error!'
     values = []
     if valid:
+        packet = zlib.decompress(packet)
         # Otherwise we got some json to unpack values from
         values = json.loads(packet.decode())
         # values = pickle.loads(packet)
@@ -177,7 +174,7 @@ def get_values(first:bool, key:str):
                 last_stamp = times[-1]
                 
                 # First get the all array, up to preload hours
-                valid, array = get_value_log(key, all=False, last=last_stamp)
+                valid, array = get_value_log(key, until=last_stamp)
                 if not valid:
                     print(f"Not valid for {key}")
                     return

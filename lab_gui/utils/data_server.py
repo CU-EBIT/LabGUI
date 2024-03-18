@@ -5,6 +5,7 @@ import threading
 import time
 import struct
 import os
+import json
 
 # Some standard message components
 DELIM = b'\x1e\x1e'
@@ -562,6 +563,20 @@ class LogServer:
     FOOTER = b'\0\0end\0\0'
     MAX_PACKET_SIZE = 32768
 
+    def make_request_message(key, start_hours=1, end_hours=0, since=None, until=None):
+        resp = {}
+        resp['key'] = key
+        now = time.time()
+        if since is not None:
+            resp['since'] = since
+        elif start_hours != 1:
+            resp['since'] = now - start_hours * 3600
+        if until is not None:
+            resp['until'] = until
+        elif end_hours != 0:
+            resp['until'] = now - end_hours * 3600
+        return json.dumps(resp)
+
     def __init__(self, addr=LOG_ADDR) -> None:
         self.addr = addr
         self.connection = socket.socket()
@@ -588,9 +603,8 @@ class LogServer:
         resps.append(LogServer.FOOTER)
         return resps
     
-    def update_values(self, key, last_point=None, end=None):
+    def update_values(self, key, last_point=None, end=None, skip_points=1):
         import datetime
-        import json
         from dateutil import parser
 
         with self.log_lock:
@@ -634,32 +648,11 @@ class LogServer:
         mask = (x>=start)&(x<=end)
         x = x[mask]
         y = y[mask]
-        values = []
-        for i in range(len(x)):
-            values.append([datetime.datetime.fromtimestamp(x[i]).isoformat(), y[i]])
-        resp = json.dumps(values).encode()
-        return resp
 
-    def get_values(self, key, start=1, end=0):
-        import datetime
-        import json
+        if skip_points > 1 and len(x) > skip_points:
+            x = x[::skip_points]
+            y = y[::skip_points]
 
-        with self.log_lock:
-            if key in self.logs:
-                log = self.logs[key]
-            else:
-                log = LogLoader(key)
-                self.logs[key] = log
-                log.check_old_dir()
-
-        x, y = log.load()
-        if x is None:
-            return b'error!'
-        now = time.time()
-        start, end = now - start * 3600, now - end * 3600
-        mask = (x>=start)&(x<=end)
-        x = x[mask]
-        y = y[mask]
         values = []
         for i in range(len(x)):
             values.append([datetime.datetime.fromtimestamp(x[i]).isoformat(), y[i]])
@@ -667,41 +660,39 @@ class LogServer:
         return resp
 
     def read_loop(self):
-        conn, _ = self.connection.accept()  # accept new connection
-        # receive data stream. it won't accept data packet greater than 4096 bytes
-        data = conn.recv(LogServer.MAX_PACKET_SIZE).decode()
-        if not data:
+        try:
+            conn, _ = self.connection.accept()  # accept new connection
+            # receive data stream. it won't accept data packet greater than MAX_PACKET_SIZE bytes
+            data = conn.recv(LogServer.MAX_PACKET_SIZE)
+        except Exception as err:
+            print("Error in recv?", err)
+            conn.close()
+            return
+        if len(data) == 0:
             # if data is not received break
             conn.close()  # close the connection
             return
-        data = data.split('\x00')
-        cmd = data[0]
-        key = data[1]
         try:
-            if cmd == 'all':
-                start = 1
-                end = 0
-                if len(data) > 2:
-                    start = float(data[2])
-                if len(data) > 3:
-                    end = float(data[3])
-                try:
-                    resp = self.get_values(key, start, end)
-                except Exception as err:
-                    print(f'Error in all processing {err}')
-                    resp = b'error!'
-                for resp in self.split(resp):
-                    conn.send(resp)
-            elif cmd == 'update':
-                last_point = None
-                end = None
-                if len(data) > 2:
-                    last_point = data[2]
-                if len(data) > 3:
-                    end = data[3]
-                resp = self.update_values(key, last_point, end)
-                for resp in self.split(resp):
-                    conn.send(resp)
+            data = data.decode()
+            values = json.loads(data)
+
+            # Key not found exception caught below.
+            key = values['key']
+
+            skip_points = 1
+            if 'skip_points' in values:
+                skip_points = values['skip_points']
+
+            last_point = None
+            end = None
+            if 'since' in values:
+                last_point = values['since']
+            if 'until' in values:
+                end = values['until']
+            resp = self.update_values(key, last_point, end, skip_points=skip_points)
+
+            for resp in self.split(resp):
+                conn.send(resp)
             else:
                 conn.send(b'error!')
         except Exception as err:
