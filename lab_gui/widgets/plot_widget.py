@@ -174,7 +174,7 @@ def get_values(first:bool, key:str):
                 last_stamp = times[-1]
                 
                 # First get the all array, up to preload hours
-                valid, array = get_value_log(key, until=last_stamp)
+                valid, array = get_value_log(key, since=last_stamp)
                 if not valid:
                     print(f"Not valid for {key}")
                     return
