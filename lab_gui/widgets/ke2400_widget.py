@@ -16,7 +16,6 @@ from ..utils.data_client import BaseDataClient
 
 class KE2400(DeviceReader):
     def __init__(self, parent, port, name="KE2400", **args):
-        super().__init__(parent, name=name, **args)
 
         self.i_cmpl_key = f'{name}_I_Compl'
         self.v_0_key = f'{name}_V_0'
@@ -33,7 +32,9 @@ class KE2400(DeviceReader):
         self.client.set_float(self.i_cmpl_key, 1e-1)
         self.client.set_float(self.v_0_key, -10)
         self.client.set_float(self.v_1_key, 10)
-        self.client.set_int(self.measure_n, 100)
+        self.client.set_float(self.measure_n, 100)
+        
+        super().__init__(parent, name=name, **args)
 
         # Time domain controls
         time_outer = QVBoxLayout()
@@ -69,15 +70,28 @@ class KE2400(DeviceReader):
         
         self._layout.addLayout(time_outer)
 
+    def collect_saved_values(self, values):
+        try:
+            _, self.settings.I_cmpl = get_tracked_value(self.i_cmpl_key)
+            _, self.settings.V_0 = get_tracked_value(self.v_0_key)
+            _, self.settings.V_1 = get_tracked_value(self.v_1_key)
+            _, self.settings.N = get_tracked_value(self.measure_n)
+        except Exception as err:
+            print(err)
+            print(f"failed to init save state for {self.name}")
+        return super().collect_saved_values(values)
+
+    def process_load_saved(self):
+        self.client.set_float(self.i_cmpl_key, self.settings.I_cmpl)
+        self.client.set_float(self.v_0_key, self.settings.V_0)
+        self.client.set_float(self.v_1_key, self.settings.V_1)
+        self.client.set_float(self.measure_n, self.settings.N )
+        return super().process_load_saved()
 
     def set_locked_texture(self):
-        # icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
-        # self.applyBtn.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
         self.applyBtn.setStyleSheet(f"background-color : {_red_}")
 
     def set_unlocked_texture(self):
-        # icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
-        # self.applyBtn.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
         self.applyBtn.setStyleSheet(f"background-color : {_green_}")
 
     def make_plot(self):
@@ -87,6 +101,34 @@ class KE2400(DeviceReader):
         self.plot_widget.label_x = "Voltage (V)"
 
     def set_data_key(self, _):
+        self.settings = self.plot_widget.settings
+
+        to_remove = [
+            'update_rate',
+            'log_length',
+            'reload_hours',
+            'paused',
+        ]
+        
+        for var in to_remove:
+            if var in self.settings._names_:
+                del self.settings._names_[var]
+
+        self.settings._names_['V_0'] = 'Start V: '
+        self.settings._names_['V_1'] = 'End V: '
+        self.settings._names_['I_cmpl'] = 'Compliance Current: '
+        self.settings._names_['N'] = 'Samples: '
+
+        try:
+            _, self.settings.I_cmpl = get_tracked_value(self.i_cmpl_key)
+            _, self.settings.V_0 = get_tracked_value(self.v_0_key)
+            _, self.settings.V_1 = get_tracked_value(self.v_1_key)
+            _, self.settings.N = get_tracked_value(self.measure_n)
+        except Exception as err:
+            print(err)
+            print(f"failed to init save state for {self.name}")
+
+        self.settings._options_ = {}
 
         self.plot_widget._has_value = True
         self.plot_widget.update_values = lambda*_:_
@@ -132,6 +174,15 @@ class KE2400(DeviceReader):
                 _, V_0 = get_tracked_value(self.v_0_key)
                 _, V_1 = get_tracked_value(self.v_1_key)
                 _, N = get_tracked_value(self.measure_n)
+
+                self.settings.I_cmpl = cmpl
+                self.settings.V_0 = V_0
+                self.settings.V_1 = V_1
+                self.settings.N = N
+
+                DIR = 'UP' if V_1 > V_0 else 'DOWN'
+                if DIR == 'DOWN':
+                    V_1, V_0 = V_0, V_1
                 
                 MAX_T = 30
                 ARM_T = 0.01
@@ -156,7 +207,7 @@ class KE2400(DeviceReader):
                 # Number of points
                 cmd = cmd + f':SOUR:SWE:POIN {N};'.encode()
                 # Sweep upwards
-                cmd = cmd + b':SOUR:SWE:DIR UP;'
+                cmd = cmd + f':SOUR:SWE:DIR {DIR};'.encode()
                 # Linear spacing
                 cmd = cmd + b':SOUR:SWE:SPAC LIN;'
                 # Add termination character
@@ -229,7 +280,7 @@ class KE2400(DeviceReader):
                         S_arr.append(float(resp[i + 4]))
 
                     V_arr = numpy.array(V_arr)
-                    I_arr = numpy.array(V_arr)
+                    I_arr = numpy.array(I_arr)
                     self.plot_data = [V_arr, I_arr, I_arr, True, 0]
                 except Exception as err:
                     print(len(resp), resp)
