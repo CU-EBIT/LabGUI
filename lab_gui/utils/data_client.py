@@ -243,15 +243,18 @@ def get_msg(key):
     # Server doesn't presently use the size bytes here, hence FILLER
     return GET + DELIM + FILLER + str.encode(key)
 
-def find_server(server_key, server_type='tcp', default_addr=ADDR):
-    finder = ServerFinder(server_type=server_type, server_key=server_key)
+def find_server(server_key, server_type='tcp', default_addr=ADDR, target_ip=None):
+    finder = ServerFinder(server_type=server_type, server_key=server_key, target_ip=target_ip)
     return finder.get_addr(default_addr)
 
 class ServerFinder:
     PORT = 30001
-    def __init__(self, server_type = 'tcp', server_key = 'default', target_port=None) -> None:
+    TARGET_IP = "255.255.255.255"
+    def __init__(self, server_type = 'tcp', server_key = 'default', target_port=None, target_ip=None) -> None:
         if target_port is None:
             target_port = ServerFinder.PORT
+        if target_ip is None:
+            target_ip = ServerFinder.TARGET_IP
         self.connection = socket.socket()
         self.connection.bind(("0.0.0.0", 0))
         self.port = self.connection.getsockname()[1]
@@ -267,9 +270,12 @@ class ServerFinder:
         allips = [ip[-1][0] for ip in interfaces]
         for ip in allips:
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)  # UDP
-            sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            sock.bind((ip,0))
-            sock.sendto(msg, ("255.255.255.255", target_port))
+            if target_ip == "255.255.255.255":
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                sock.bind((ip,0))
+                sock.sendto(msg, (target_ip, target_port))
+            else:
+                sock.sendto(msg, (target_ip, target_port))
             sock.close()
             try:
                 conn, addr = self.connection.accept()
