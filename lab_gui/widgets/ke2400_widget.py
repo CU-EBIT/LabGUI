@@ -15,13 +15,14 @@ from ..modules.module import BetterAxisItem
 from ..utils.data_client import BaseDataClient
 
 class KE2400(DeviceReader):
-    def __init__(self, parent, port, name="KE2400", **args):
+    def __init__(self, parent, port, baudrate=9600, name="KE2400", **args):
 
         self.i_cmpl_key = f'{name}_I_Compl'
         self.v_0_key = f'{name}_V_0'
         self.v_1_key = f'{name}_V_1'
         self.measure_n = f'{name}_N'
 
+        self.baudrate = baudrate
         self.port = port
 
         for key, value in args.items():
@@ -33,6 +34,7 @@ class KE2400(DeviceReader):
         self.client.set_float(self.v_0_key, -10)
         self.client.set_float(self.v_1_key, 10)
         self.client.set_float(self.measure_n, 100)
+        self.cur_range = QLineEdit('AUTO')
         
         super().__init__(parent, name=name, **args)
 
@@ -45,6 +47,8 @@ class KE2400(DeviceReader):
         self.do_sweep = False
         self.lock = threading.Lock()
         def apply():
+            if self.paused:
+                return
             with self.lock:
                 self.set_locked_texture()
                 self.do_sweep = True
@@ -55,12 +59,17 @@ class KE2400(DeviceReader):
 
         line = SingleInputWidget(self, self.i_cmpl_key, "{:.2e}")
         time_layout.addWidget(line)
+        self._modules.append(line)
         line = SingleInputWidget(self, self.v_0_key, "{:.2f}")
         time_layout.addWidget(line)
+        self._modules.append(line)
         line = SingleInputWidget(self, self.v_1_key, "{:.2f}")
         time_layout.addWidget(line)
+        self._modules.append(line)
         line = SingleInputWidget(self, self.measure_n, "{}")
         time_layout.addWidget(line)
+        self._modules.append(line)
+        time_layout.addWidget(self.cur_range)
 
         time_layout.addWidget(self.applyBtn)
         time_layout.addStretch(0)
@@ -71,14 +80,7 @@ class KE2400(DeviceReader):
         self._layout.addLayout(time_outer)
 
     def collect_saved_values(self, values):
-        try:
-            _, self.settings.I_cmpl = get_tracked_value(self.i_cmpl_key)
-            _, self.settings.V_0 = get_tracked_value(self.v_0_key)
-            _, self.settings.V_1 = get_tracked_value(self.v_1_key)
-            _, self.settings.N = get_tracked_value(self.measure_n)
-        except Exception as err:
-            print(err)
-            print(f"failed to init save state for {self.name}")
+        # values['CURR_RANG'] = self.cur_range
         return super().collect_saved_values(values)
 
     def process_load_saved(self):
@@ -118,8 +120,10 @@ class KE2400(DeviceReader):
         self.settings._names_['V_1'] = 'End V: '
         self.settings._names_['I_cmpl'] = 'Compliance Current: '
         self.settings._names_['N'] = 'Samples: '
+        self.settings.log_scale = False
 
         try:
+            print("Making settings")
             _, self.settings.I_cmpl = get_tracked_value(self.i_cmpl_key)
             _, self.settings.V_0 = get_tracked_value(self.v_0_key)
             _, self.settings.V_1 = get_tracked_value(self.v_1_key)
@@ -143,12 +147,14 @@ class KE2400(DeviceReader):
     
     def open_device(self):
         try:
-            self.device = serial.Serial(self.port)
+            self.device = serial.Serial(self.port, baudrate=self.baudrate)
             self.device.write(b"*IDN?\n")
             self.device.timeout = 0.25
-            idn = self.device.read_until(b'\r').decode().strip()
+            time.sleep(0.1)
+            idn = self.device.read_all().decode().strip()
+            print(idn)
             if not idn.startswith('KEITHLEY INSTRUMENTS INC.,MODEL 24'):
-                print(f"Wrong device on {self.port}, expected a KEITHLEY INSTRUMENTS INC.,MODEL 24")
+                print(f"Wrong device on {self.port}, expected a KEITHLEY INSTRUMENTS INC.,MODEL 24, got {idn}")
                 self.device = None
                 return False
 
@@ -161,132 +167,175 @@ class KE2400(DeviceReader):
     
     def do_device_update(self):
         with self.lock:
-            if self.do_sweep:
-                device = self.device
-                
-                # Auto range for voltage and current
-                cmd = b':VOLT:RANG:AUTO ON;\n'
-                device.write(cmd)
-                cmd = b':CURR:RANG:AUTO ON;\n'
-                device.write(cmd)
+            try:
+                if self.do_sweep:
+                    device = self.device
+                    
+                    # Auto range for voltage and current
+                    cmd = b':VOLT:RANG:AUTO ON;\n'
+                    device.write(cmd)
 
-                _, cmpl = get_tracked_value(self.i_cmpl_key)
-                _, V_0 = get_tracked_value(self.v_0_key)
-                _, V_1 = get_tracked_value(self.v_1_key)
-                _, N = get_tracked_value(self.measure_n)
+                    curr_range = self.cur_range.text().upper()
 
-                self.settings.I_cmpl = cmpl
-                self.settings.V_0 = V_0
-                self.settings.V_1 = V_1
-                self.settings.N = N
+                    if curr_range == 'AUTO':
+                        cmd = b':CURR:RANG:AUTO ON;\n'
+                        device.write(cmd)
+                    else:
+                        cmd = b':CURR:RANG:AUTO OFF;\n'
+                        device.write(cmd)
+                        cmd = f':CURR:RANG {curr_range};\n'.encode()
+                        device.write(cmd)
 
-                DIR = 'UP' if V_1 > V_0 else 'DOWN'
-                if DIR == 'DOWN':
-                    V_1, V_0 = V_0, V_1
-                
-                MAX_T = 30
-                ARM_T = 0.01
-                TRIG_DELAY = 0.0
-                # Set to voltage source mode
-                cmd = b'SOUR:FUNC VOLT;'
-                # Set source voltage to 0V
-                cmd = cmd + f':SOUR:VOLT 0.000000;'.encode()
-                # Set Current compliance
-                cmd = cmd + f':CURR:PROT {cmpl:6f};'.encode()
-                # Add termination character
-                cmd = cmd + b'\n'
-                # Send command
-                device.write(cmd)
+                    _, cmpl = get_tracked_value(self.i_cmpl_key)
+                    _, V_0 = get_tracked_value(self.v_0_key)
+                    _, V_1 = get_tracked_value(self.v_1_key)
+                    _, N = get_tracked_value(self.measure_n)
 
-                # Volt mode
-                cmd = b'SOUR:FUNC VOLT;'
-                # Start setting
-                cmd = cmd + f':SOUR:VOLT:STAR {V_0:.6f};'.encode()
-                # End setting
-                cmd = cmd + f':SOUR:VOLT:STOP {V_1:.6f};'.encode()
-                # Number of points
-                cmd = cmd + f':SOUR:SWE:POIN {N};'.encode()
-                # Sweep upwards
-                cmd = cmd + f':SOUR:SWE:DIR {DIR};'.encode()
-                # Linear spacing
-                cmd = cmd + b':SOUR:SWE:SPAC LIN;'
-                # Add termination character
-                cmd = cmd + b'\n'
-                # Send command
-                device.write(cmd)
+                    self.settings.I_cmpl = cmpl
+                    self.settings.V_0 = V_0
+                    self.settings.V_1 = V_1
+                    self.settings.N = N
 
-                # Enable output
-                cmd = b'OUTP ON;\n'
-                # Send command
-                device.write(cmd)
+                    print(N, V_0, V_1, cmpl, curr_range)
 
-                # Arm for triggering
-                cmd = f':ARM:COUN 1;:TRIG:COUN {N};:SOUR:VOLT:MODE SWE;:SOUR:CURR:MODE SWE;\n'.encode()
-                # Send command
-                device.write(cmd)
+                    DIR = 'UP' if V_1 > V_0 else 'DOWN'
+                    if DIR == 'DOWN':
+                        V_1, V_0 = V_0, V_1
+                    
+                    MAX_T = 30
+                    ARM_T = 0.01
+                    TRIG_DELAY = 0.0
+                    # Set to voltage source mode
+                    cmd = b'SOUR:FUNC VOLT;'
+                    # Set source voltage to 0V
+                    cmd = cmd + f':SOUR:VOLT 0.000000;'.encode()
+                    # Set Current compliance
+                    cmd = cmd + f':CURR:PROT {cmpl:6f};'.encode()
+                    # Add termination character
+                    cmd = cmd + b'\n'
+                    # Send command
+                    device.write(cmd)
 
-                # Setup triggering
-                cmd = f'ARM:SOUR IMM;:ARM:TIM {ARM_T:.6f};:TRIG:SOUR IMM;:TRIG:DEL {TRIG_DELAY:.6f};\n'.encode()
-                # Send command
-                device.write(cmd)
+                    # Volt mode
+                    cmd = b'SOUR:FUNC VOLT;'
+                    # Start setting
+                    cmd = cmd + f':SOUR:VOLT:STAR {V_0:.6f};'.encode()
+                    # End setting
+                    cmd = cmd + f':SOUR:VOLT:STOP {V_1:.6f};'.encode()
+                    # Number of points
+                    cmd = cmd + f':SOUR:SWE:POIN {N};'.encode()
+                    # Sweep upwards
+                    cmd = cmd + f':SOUR:SWE:DIR {DIR};'.encode()
+                    # Linear spacing
+                    cmd = cmd + b':SOUR:SWE:SPAC LIN;'
+                    # Add termination character
+                    cmd = cmd + b'\n'
+                    # Send command
+                    device.write(cmd)
 
-                # Initiate measurement
-                cmd = b':TRIG:CLE;:INIT;\n'
-                # Send command
-                device.write(cmd)
+                    # disable display
+                    cmd = b':DISPlay:ENABle OFF;\n'
+                    # Send command
+                    device.write(cmd)
+                    # Enable output
+                    cmd = b'OUTP ON;\n'
+                    # Send command
+                    device.write(cmd)
 
-                # Now wait for OPC
-                cmd = b'*OPC?\n'
-                device.timeout = 0.25
-                # Send command
-                device.write(cmd)
-                time.sleep(0.1)
-                resp = device.read_until("\r")
-                start = time.time()
-                while(resp.decode().strip() != "1") and time.time() - start < MAX_T:
+                    # Arm for triggering
+                    cmd = f':ARM:COUN 1;:TRIG:COUN {N};:SOUR:VOLT:MODE SWE;:SOUR:CURR:MODE SWE;\n'.encode()
+                    # Send command
+                    device.write(cmd)
+
+                    # Setup triggering
+                    cmd = f'ARM:SOUR IMM;:ARM:TIM {ARM_T:.6f};:TRIG:SOUR IMM;:TRIG:DEL {TRIG_DELAY:.6f};\n'.encode()
+                    # Send command
+                    device.write(cmd)
+
+                    # Initiate measurement
+                    cmd = b':TRIG:CLE;:INIT;\n'
+                    # Send command
+                    device.write(cmd)
+
+                    # Now wait for OPC
+                    cmd = b'*OPC?\n'
+                    device.timeout = 0.25
+                    time.sleep(ARM_T * N)
+                    # Send command
                     device.write(cmd)
                     time.sleep(0.1)
                     resp = device.read_until("\r")
-                print("Ready")
-
-                # Disable output
-                cmd = b'OUTP OFF;\n'
-                # Send command
-                device.write(cmd)
-                
-                # Fetch data
-                cmd = b':FETC?\n'
-                device.timeout = 10
-                # Send command
-                device.write(cmd)
-                resp = device.read_all()
-                time.sleep(0.1)
-                while device.in_waiting:
-                    resp = resp + device.read_all()
+                    start = time.time()
+                    while(resp.decode().strip() != "1") and time.time() - start < MAX_T:
+                        device.write(cmd)
+                        time.sleep(0.1)
+                        resp = device.read_until("\r")
+                    print("Ready")
                     time.sleep(0.1)
-                resp = resp.decode().strip().split(',')
 
-                I_arr = []
-                V_arr = []
-                R_arr = []
-                T_arr = []
-                S_arr = []
-                try:
-                    for i in range(0, len(resp), 5):
-                        V_arr.append(float(resp[i + 0]))
-                        I_arr.append(float(resp[i + 1]))
-                        R_arr.append(float(resp[i + 2]))
-                        T_arr.append(float(resp[i + 3]))
-                        S_arr.append(float(resp[i + 4]))
+                    # enable display
+                    cmd = b':DISPlay:ENABle ON;\n'
+                    # Send command
+                    device.write(cmd)
+                    # Disable output
+                    cmd = b'OUTP OFF;\n'
+                    # Send command
+                    device.write(cmd)
+                    time.sleep(0.1)
+                    
+                    # Fetch data
+                    cmd = b':FETC?\n'
+                    device.timeout = 10
+                    # Send command
+                    device.write(cmd)
+                    time.sleep(0.5)
+                    resp = device.read_all()
+                    if resp == b'1\r':
+                        resp = b''
+                    time.sleep(0.5)
+                    while device.in_waiting:
+                        read = device.read_all()
+                        if read == b'1\r':
+                            read = b''
+                        resp = resp + read
+                        time.sleep(0.5)
+                    resp = resp.decode().replace('1\r', '').strip().split(',')
 
-                    V_arr = numpy.array(V_arr)
-                    I_arr = numpy.array(I_arr)
-                    self.plot_data = [V_arr, I_arr, I_arr, True, 0]
-                except Exception as err:
-                    print(len(resp), resp)
-                    print(f"Error unpacking values: {err}")
-                print("Finished!")
+                    I_arr = []
+                    V_arr = []
+                    R_arr = []
+                    T_arr = []
+                    S_arr = []
+                    try:
+                        for i in range(0, len(resp), 5):
+                            V_arr.append(float(resp[i + 0]))
+                            I_arr.append(float(resp[i + 1]))
+                            R_arr.append(float(resp[i + 2]))
+                            T_arr.append(float(resp[i + 3]))
+                            S_arr.append(float(resp[i + 4]))
 
+                        V_arr = numpy.array(V_arr)
+                        I_arr = numpy.array(I_arr)
+                        self.plot_data = [V_arr, I_arr, I_arr, True, 0]
+
+                        if self.do_log:
+                            try:
+                                filenme = self.get_log_file("IV_Curve")
+                                with open(filenme, 'w') as file:
+                                    file.write('Voltage (V)\tCurrent (A)\n')
+                                    for i in range(len(V_arr)):
+                                        file.write(f'{V_arr[i]:.6e}\t{I_arr[i]:.6e}\n')
+                            except Exception as ferr:
+                                print(f"Error writing log {ferr}")
+                    except Exception as err:
+                        print(len(resp), resp)
+                        print(f"Error unpacking values: {err}")
+                    print("Finished!")
+            except Exception as err:
+                print(err)
+        
+        with self.lock:
+            if self.do_sweep:
                 self.do_sweep = False
                 self.set_unlocked_texture()
         time.sleep(0.25)
