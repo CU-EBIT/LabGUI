@@ -85,6 +85,13 @@ class MainModule(FigureModule):
         self._modules.clear()
         # Here is where you should add things that you want to have on after the main plot has been added to the canvas
 
+        addDock = self.plot_widget.addDock
+        def add_dock(dock, *args, **kargs):
+            addDock(dock, *args, **kargs)
+            if hasattr(dock, '_holder_widget'):
+                dock._holder_widget.post_added_to_dockarea()
+        self.plot_widget.addDock = add_dock
+
         self.module_source(self)
 
         for mod in self._modules:
