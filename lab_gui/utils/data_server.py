@@ -292,8 +292,8 @@ class BaseDataServer:
                         to_log = BaseDataServer.pending_save[key]
                     else:
                         BaseDataServer.pending_save[key] = to_log
-                
-                to_log.append(value)
+                    to_log.append(value)
+                    
                 if key in callback_targets:
                     targets = callback_targets[key]
                     for pair in targets:
@@ -381,6 +381,17 @@ class BaseDataServer:
     
 class DataSaver:
 
+    def get_value_len(value):  
+        try:
+            from .data_client import TYPES
+        except:
+            from data_client import TYPES      
+        id = value[0]
+        TYPE = TYPES[id - 1]
+        tst = TYPE()
+        length = tst.size()
+        return length
+
     def __init__(self) -> None:
         self.save_delay = 0.25
         self._running_ = False
@@ -404,6 +415,11 @@ class DataSaver:
                         file = open(filename, 'ab')
                         while(len(values)):
                             value = values.pop(0)
+                            # Ensure lenghth is correct
+                            size = DataSaver.get_value_len(value)
+                            if size != len(value):
+                                print(f"Value size error? {size} != {len(value)}, {key}, {value}")
+                                continue
                             file.write(value)
                         file.close()
                         file_stats = os.stat(filename)
@@ -415,7 +431,8 @@ class DataSaver:
                             else:
                                 os.rename(filename, filename_bak)
                             os.remove(filename)
-                    except:
+                    except Exception as err:
+                        print(f"Error while saving value: {err}")
                         pass
 
     def make_thread(self):
@@ -438,10 +455,6 @@ class LogLoader:
         self.min_free_space = min_free_space
 
     def _load_values(self, filename, file_end):
-        try:
-            from .data_client import TYPES
-        except:
-            from data_client import TYPES
         import numpy as np
             
         file = open(filename, 'rb')
@@ -450,9 +463,7 @@ class LogLoader:
 
         self.raw_values = vars
         id = vars[0]
-        TYPE = TYPES[id - 1]
-        tst = TYPE()
-        length = tst.size()
+        length = DataSaver.get_value_len(vars)
 
         number = len(vars) / length
         if number != int(number):
