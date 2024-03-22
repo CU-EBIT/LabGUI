@@ -77,6 +77,7 @@ class BasicPowerSupply(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, Ba
         self._frame.setFixedHeight(int(h))
 
         self._layout.addStretch(0)
+        self.need_init = False
         
         times = numpy.full(int(_max_points), time.time())
         values = numpy.full(int(_max_points), self.value)
@@ -122,6 +123,17 @@ class BasicPowerSupply(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, Ba
         """We do nothing here, but we have the function so we act as a "data_source" for the ControlButton
         """
         return
+    
+    def update_values(self):     
+        if self.need_init:       
+            self.powerBtn.setChecked(self.is_output_enabled())
+            self.output_enabled = self.powerBtn.isChecked()
+            V = self.get_set_voltage()
+            I = self.get_set_current()
+            self.V_out.box.setText(f'{V:.2f}')
+            self.I_out.box.setText(f'{I:.3f}')
+            self.need_init = False
+        return super().update_values()
 
     def open_device(self):
         opened = self.device.open_device()
@@ -129,12 +141,9 @@ class BasicPowerSupply(DeviceReader, BasicCurrentMeasure, BasicCurrentSource, Ba
         if not opened:
             return False
         try:
-            self.powerBtn.setChecked(self.is_output_enabled())
-            self.output_enabled = self.powerBtn.isChecked()
-            V = self.get_set_voltage()
-            I = self.get_set_current()
-            self.V_out.box.setText(f'{V:.2f}')
-            self.I_out.box.setText(f'{I:.3f}')
+            self.need_init = True
+            while self.need_init:
+                time.sleep(0.01)
             self.valid = True
         except Exception as err:
             print(err)

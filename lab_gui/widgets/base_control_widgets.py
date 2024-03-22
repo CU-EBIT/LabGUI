@@ -1,13 +1,13 @@
 import time
 import os
 import json
+import datetime
 
 from pyqtgraph.dockarea.DockArea import Dock
 from pyqtgraph.dockarea.Dock import DockLabel
 
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
-from ..utils import data_client
 from ..utils.data_client import BaseDataClient
 
 _red_ = '#B94700'
@@ -81,18 +81,26 @@ QHeaderView::section
 # This is a ValueListener (see modules.module.ValueListener)
 callbacks = None
 
+def try_init_value(key, _default):
+    client = BaseDataClient()
+    vars = client.get_value(key)
+    if vars is None:
+        client.set_value(key, _default)
+        return _default
+    return vars[1]
+
 def get_tracked_value(key):
     value = callbacks.get_value(key)
     if value is not None:
         return value
-    client = BaseDataClient(data_client.ADDR)
+    client = BaseDataClient()
     value = client.get_value(key)
     callbacks.values[key] = value
     return value
 
 def register_tracked_key(key):
     if callbacks.add_listener(key, callbacks.listener):
-        client = BaseDataClient(data_client.ADDR)
+        client = BaseDataClient()
         client.register_callback_server(key, callbacks.port)
 
 def widget_dpi(widget):
@@ -301,10 +309,16 @@ class SubControlWidget:
         self.frame.setContentsMargins(2,2,2,2)
         if make_dock:
             self.dock = FrameDock(widget=self.frame,menu_fn=menu_fn,help_fn=help_fn)
+            self.dock._holder_widget = self
 
     def close(self):
         """Called when module is removed, ensure to close any opened resources, etc here.
         """        
+        return
+    
+    def post_added_to_dockarea(self):
+        """Called after adding us to our parent's dock area, can be used to then add sub-docks
+        """
         return
 
     def set_name(self, name):
@@ -726,6 +740,8 @@ class ControlButton(QPushButton):
         new_value = self.values[1] if self.predicate(self.value) else self.values[0]
         if self.client is not None:
             self.client.set_value(self.key, new_value)
+            if self.tracked:
+                callbacks.values[self.key] = (datetime.datetime.now(),new_value)
         self.value = new_value
         self.update_values()
 

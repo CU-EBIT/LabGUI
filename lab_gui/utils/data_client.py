@@ -8,14 +8,6 @@ import time
 # Adds prints if things go wrong
 DEBUG = False
 
-# Address to use, ensure that you set this in your implementation!
-ADDR = None
-
-# Tuple of (address, port) for log access
-DATA_LOG_HOST = None
-
-DATA_SERVER_KEY = None
-
 class DoubleValue:
     '''Implementation of a value containing a 64 bit floating point number'''
     def __init__(self) -> None:
@@ -163,7 +155,7 @@ CLOSED = SUCCESS + DALIM + CLOSE
 # Client -> server messages
 _open_cmd = OPEN + DELIM + FILLER + OPEN
 _close_cmd = CLOSE + DELIM + FILLER + CLOSE
-# _hello = HELLO + DELIM + HELLO
+_hello = HELLO + DELIM + HELLO
 all_request = ALL + DELIM + FILLER + ALL
 
 def callback_request(key, port, closing=False, rate = 100):
@@ -243,9 +235,52 @@ def get_msg(key):
     # Server doesn't presently use the size bytes here, hence FILLER
     return GET + DELIM + FILLER + str.encode(key)
 
-def find_server(server_key, server_type='tcp', default_addr=ADDR, target_ip=None):
+def find_server(server_key, server_type='tcp', default_addr=None, target_ip=None):
+    is_log = server_type == 'log'
+    if default_addr == None:
+        default_addr = BaseDataClient.ADDR if not is_log else BaseDataClient.DATA_LOG_HOST
+
+    try:
+        if default_addr is not None:
+            # Try pinging
+            if is_log:
+                conn = socket.socket()
+                conn.settimeout(0.25)
+                conn.connect(default_addr)
+                conn.send(_hello)
+                resp = conn.recv(1024)
+                conn.close()
+                if HELLO in resp:
+                    return default_addr
+            else:
+                if server_type == 'tcp':
+                    conn = socket.socket()
+                    conn.settimeout(0.25)
+                    conn.connect(default_addr)
+                    conn.send(_hello)
+                    resp = conn.recv(1024)
+                    conn.close()
+                    if HELLO in resp:
+                        return default_addr
+                else:
+                    conn = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+                    conn.settimeout(0.25)
+                    conn.sendto(_hello, default_addr)
+                    resp = conn.recv(1024)
+                    conn.close()
+                    if HELLO in resp:
+                        return default_addr
+    except Exception as err:
+        print("Error checking default address")
+        default_addr = None
+
     finder = ServerFinder(server_type=server_type, server_key=server_key, target_ip=target_ip)
-    return finder.get_addr(default_addr)
+    addr = default_addr if finder.addr is None else finder.addr
+    if default_addr == None and not is_log:
+        BaseDataClient.ADDR = addr
+    elif default_addr == None:
+        BaseDataClient.DATA_LOG_HOST = addr
+    return addr
 
 class ServerFinder:
     PORT = 30001
@@ -265,6 +300,27 @@ class ServerFinder:
 
         msg = f'{GET.decode()}{DALIM.decode()}{server_type}{DELIM.decode()}{server_key}{DELIM.decode()}{port}'.encode()
 
+        try:
+            # try local host or manual IP first:
+            target = '127.0.0.1' if target_ip == ServerFinder.TARGET_IP else target_ip
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)  # UDP
+            sock.sendto(msg, (target, target_port))
+            sock.close()
+
+            conn, addr = self.connection.accept()
+            self.message = conn.recv(BUFSIZE)
+            conn.close()
+            args = self.message.split(DALIM)
+            if args[0].decode() == server_key:
+                _ip = addr[0]
+                if ip == _ip:
+                    _ip = '127.0.0.1'
+                self.addr = (_ip, int(args[1].decode()))
+                self.connection.close()
+                return
+        except:
+            pass
+
         # From stack overflow
         interfaces = socket.getaddrinfo(host=socket.gethostname(), port=None, family=socket.AF_INET)
         allips = [ip[-1][0] for ip in interfaces]
@@ -280,6 +336,7 @@ class ServerFinder:
             try:
                 conn, addr = self.connection.accept()
                 self.message = conn.recv(BUFSIZE)
+                conn.close()
                 args = self.message.split(DALIM)
                 if args[0].decode() == server_key:
                     _ip = addr[0]
@@ -291,14 +348,11 @@ class ServerFinder:
                 pass
         self.connection.close()
 
-    def get_addr(self, default):
-        return default if self.addr is None else self.addr
-
 class DataCallbackServer:
     def __init__(self, port = 0, client_addr = None) -> None:
         '''addr is address/port tuple, custom_port would call select() if true'''
         if client_addr is None:
-            client_addr = ADDR
+            client_addr = BaseDataClient.ADDR
         self.connection = None
         self.addr = ("0.0.0.0", port)
         self.client_addr = client_addr
@@ -323,9 +377,8 @@ class DataCallbackServer:
     def close(self):
         
         try:
-            if DATA_SERVER_KEY is not None:
-                finder = ServerFinder('tcp', DATA_SERVER_KEY)
-                addr = finder.addr
+            if BaseDataClient.DATA_SERVER_KEY is not None:
+                addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp')
             else:
                 addr = self.client_addr
 
@@ -390,9 +443,8 @@ class DataCallbackServer:
                     keys.append(key)
             if len(keys):
                 try:
-                    if DATA_SERVER_KEY is not None:
-                        finder = ServerFinder('tcp', DATA_SERVER_KEY)
-                        addr = finder.addr
+                    if BaseDataClient.DATA_SERVER_KEY is not None:
+                        addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp')
                     else:
                         addr = self.client_addr
                     client = BaseDataClient(addr)
@@ -405,11 +457,21 @@ class DataCallbackServer:
                     print(f"Error in check alive: {err}")
 
 class BaseDataClient:
+
+    # Address to use, ensure that you set this in your implementation!
+    ADDR = None
+
+    # Tuple of (address, port) for log access
+    DATA_LOG_HOST = None
+
+    # Key for automatic server lookup
+    DATA_SERVER_KEY = None
+
     '''Python client implementation'''
     def __init__(self, addr=None, custom_port=False) -> None:
         '''addr is address/port tuple, custom_port would call select() if true'''
         if addr is None:
-            addr = ADDR
+            addr = BaseDataClient.ADDR
         self.connection = None
         self.tcp = True
         self.addr = addr
@@ -446,9 +508,9 @@ class BaseDataClient:
         '''Starts a new connection, closes existing one if present.'''
         
         if self.addr is None:
-            if DATA_SERVER_KEY is None:
+            if BaseDataClient.DATA_SERVER_KEY is None:
                 return
-            self.addr = find_server(DATA_SERVER_KEY, 'tcp' if self.tcp else 'udp')
+            self.addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp' if self.tcp else 'udp')
         if self.addr is None:
             return
         
@@ -471,8 +533,8 @@ class BaseDataClient:
                 self.connection = None
             except Exception as err:
                 print(f'error closing? {err}')
-        if on_fail and DATA_SERVER_KEY is not None:
-            self.addr = find_server(DATA_SERVER_KEY, 'tcp' if self.tcp else 'udp')
+        if on_fail and BaseDataClient.DATA_SERVER_KEY is not None:
+            self.addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp' if self.tcp else 'udp')
             if self.addr is not None:
                 self.root_port = self.addr[1]
     
