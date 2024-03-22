@@ -457,6 +457,28 @@ class LogLoader:
         number = len(vars) / length
         if number != int(number):
             raise RuntimeWarning("Wrong size in file!")
+            # _vars = b''
+            # shift = 0
+            # # print(f"Wrong size in file!, {number}, {file_end}")
+            # # Attempt to clean it anyway
+            # for i in range(int(number)):
+            #     l = i - shift
+            #     s = l * length
+            #     e = s + length
+            #     args = vars[s:e]
+            #     if args[0] != id:
+            #         for j in range(length):
+            #             if args[j] == id:
+            #                 shift = j
+            #                 l = i - shift
+            #                 s = l * length
+            #                 e = s + length
+            #                 args = vars[s:e]
+            #     _vars += args
+            # vars = _vars
+            # number = len(vars) / length
+            # if number != int(number):
+            #     return
 
         # numpy stuff from Tim
         vars = np.array(list(vars), dtype='uint8')
@@ -617,6 +639,8 @@ class LogServer:
 
         x, y = log.load()
         if x is None:
+            with self.log_lock:
+                del self.logs[key]
             return b'error!'
         
         now = time.time()
@@ -673,7 +697,14 @@ class LogServer:
             conn.close()  # close the connection
             return
         try:
+
+            if data.startswith(HELLO):
+                conn.send(HELLO_FROM_SERVER)
+                conn.close()  # close the connection
+                return
+            
             data = data.decode()
+
             values = json.loads(data)
 
             # Key not found exception caught below.
@@ -696,7 +727,7 @@ class LogServer:
             else:
                 conn.send(b'error!')
         except Exception as err:
-            print(f'Error in request {err}')
+            print(f'Error in logs request {err}, {data}')
             conn.send(b'error!')
         conn.close()
 
