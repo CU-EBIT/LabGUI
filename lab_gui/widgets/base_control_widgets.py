@@ -1096,9 +1096,14 @@ class TableDisplayWidget(QTableWidget):
         self.cells = {}
         self.clickable = True
         self.auto_size = auto_size
-        self.padding = [2, 26]
+        self.padding = [' ', ' ']
+        self._added_horiz = False
+        self._added_vert = False
         self.setColumnCount(len(headers))
         self.setRowCount(len(rows))
+        self.setViewportMargins(0,0,0,0)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.update_values()
 
     def no_clicky(self):
@@ -1122,7 +1127,8 @@ class TableDisplayWidget(QTableWidget):
             m = 0
             # First add row label
             if self.init:
-                cell = QLabel(row[0])
+                label = f'{self.padding[0]}{row[0]}{self.padding[1]}'
+                cell = QLabel(label)
                 self.setCellWidget(n, m, cell)
                 self.cells[f'{n},{m}'] = cell
             m = 1
@@ -1147,7 +1153,7 @@ class TableDisplayWidget(QTableWidget):
                     self.setCellWidget(n, m, cell)
                 else:
                     cell = self.cells[f'{n},{m}']
-                    cell[0].setText(str(var))
+                    cell[0].setText(f'{self.padding[0]}{var}{self.padding[1]}')
                     cell[1] = val
                 m += 1
             n += 1
@@ -1159,10 +1165,10 @@ class TableDisplayWidget(QTableWidget):
             self.setHorizontalHeaderLabels(self.headers)
             self.resizeColumnsToContents()
             self.resizeRowsToContents()
-            h = 0
-            w = 0
+            h = self.horizontalHeader().height()
+            w = self.verticalHeader().width()
             for i in range(self.rowCount()):
                 h += self.rowHeight(i)
             for i in range(self.columnCount()):
                 w += self.columnWidth(i)
-            self.resize(w+self.padding[0], h+self.padding[1])
+            self.resize(w, h)

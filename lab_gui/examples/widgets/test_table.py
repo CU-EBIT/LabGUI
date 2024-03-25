@@ -19,6 +19,7 @@ class TableDisplay(SubControlWidget):
         self._layout.addStretch(1)
 
         holder = QHBoxLayout()
+        holder.setContentsMargins(0,0,0,0)
 
         holder.addWidget(self.table)
         holder.addStretch(1)
@@ -41,23 +42,31 @@ class TableDisplay(SubControlWidget):
         return table
 
     def frame_size(self):
-        h = 0
-        w = 0
+        h = self.table.horizontalHeader().height()
+        w = self.table.verticalHeader().width()
         for i in range(self.table.rowCount()):
             h += self.table.rowHeight(i)
         for i in range(self.table.columnCount()):
             w += self.table.columnWidth(i)
         self.w = w
         self.h = h
-        self.resize(w + 24, h + 47)
+            
+        m = self.frame.contentsMargins()
+        mw = m.left() + m.right()
+        mh = m.top() + m.bottom()
+        m = self._layout.contentsMargins()
+        mw += m.left() + m.right()
+        mh += m.top() + m.bottom()
+        
+        h += mh
+        w += mw
+
+        self.resize(w, h)
 
     def on_update(self):
-        h = 0
-        w = 0
-        for i in range(self.table.rowCount()):
-            h += self.table.rowHeight(i)
-        for i in range(self.table.columnCount()):
-            w += self.table.columnWidth(i)
+        rect = self.table.rect()
+        h = rect.height()
+        w = rect.width()
         if h != self.h or w != self.w:
             self.frame_size()
         # We make the values ourself as this is a test.
