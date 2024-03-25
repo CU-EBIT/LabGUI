@@ -304,7 +304,7 @@ class MasterGui(QMainWindow):
     # Generates a window with options for editing floating point fields for thing
     # thing must have a _names_ attribute which is a map of <attr> to <name>, where
     # <name> is what the box will be labelled. These values should all be floats!
-    def edit_options(self, dock, thing, name, callback, custom_owner=None):
+    def edit_options(self, dock, thing, name, callback, custom_owner=None, new_window=False):
         if self.dialog is not None:
             self.dialog.close()
         dialog = FrameDock(name, closable=True)
@@ -363,7 +363,11 @@ class MasterGui(QMainWindow):
         cancel_button.clicked.connect(lambda: [dialog.close()])
         buttons.addWidget(cancel_button)
 
-        self._main.addDock(dialog, 'top', dock)
+        if new_window:
+            dialog.area = dock.area
+            dialog.float()
+        else:
+            self._main.addDock(dialog, 'top', dock)
 
 def start():
     import sys

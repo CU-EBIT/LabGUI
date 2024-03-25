@@ -225,6 +225,17 @@ class FrameDockLabel(DockLabel):
 
     def add_menu_button(self, function):
         self.menuButton = QtWidgets.QToolButton(self)
+
+        if isinstance(function, tuple):
+            _right_click = function[1]
+            function = function[0]
+            _wrapped = self.menuButton.mouseReleaseEvent
+            def mouse_wrapper(event, **kargs):
+                _wrapped(event, **kargs)
+                if event.button() == Qt.MouseButton.RightButton:
+                    _right_click()
+            self.menuButton.mouseReleaseEvent = mouse_wrapper
+        
         self.menuButton.clicked.connect(function)
         icon = QtWidgets.QStyle.StandardPixmap.SP_FileDialogDetailedView
         self.menuButton.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
@@ -232,6 +243,17 @@ class FrameDockLabel(DockLabel):
 
     def add_help_button(self, function):
         self.helpButton = QtWidgets.QToolButton(self)
+
+        if isinstance(function, tuple):
+            _right_click = function[1]
+            function = function[0]
+            _wrapped = self.helpButton.mouseReleaseEvent
+            def mouse_wrapper(event, **kargs):
+                _wrapped(event, **kargs)
+                if event.button() == Qt.MouseButton.RightButton:
+                    _right_click()
+            self.helpButton.mouseReleaseEvent = mouse_wrapper
+        
         self.helpButton.clicked.connect(function)
         icon = QtWidgets.QStyle.StandardPixmap.SP_TitleBarContextHelpButton
         self.helpButton.setIcon(QtWidgets.QApplication.style().standardIcon(icon))

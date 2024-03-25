@@ -83,7 +83,7 @@ class DeviceController(SubControlWidget, BaseDevice):
         self.paused = not self.active_button.isChecked()
         self.saver.on_changed(self.active_button)
 
-    def open_settings(self):
+    def open_settings(self, new_window=False):
         """Makes the button for showing the plotter's options"""
         key = self.name
         callback = self.settings._callback
@@ -91,7 +91,7 @@ class DeviceController(SubControlWidget, BaseDevice):
             if callback is not None:
                 callback()
             self.saver.on_changed(self.settings)
-        self.parent._root.edit_options(self.dock, self.settings, key, _cb)
+        self.parent._root.edit_options(self.dock, self.settings, key, _cb, new_window=new_window)
 
     def pre_loop_start(self):
         """Called on the device access thread before entering the main loop.
@@ -219,6 +219,12 @@ class DeviceReader(DeviceController):
         self.log_button.setChecked(True)
         self.log_button.clicked.connect(self.toggle_log)
 
+        def _left_click():
+            self.open_settings(False)
+        def _right_click():
+            self.open_settings(True)
+        menu_fn = (_left_click, _right_click)
+
         self.has_plot = has_plot
         if has_plot:
             self.make_plot()
@@ -238,7 +244,7 @@ class DeviceReader(DeviceController):
             self.plot_widget.setup()
             self.plot_widget.start()
 
-            self.plot_dock = FrameDock(widget=self.plot_widget,menu_fn=self.open_settings,help_fn=None)
+            self.plot_dock = FrameDock(widget=self.plot_widget,menu_fn=menu_fn,help_fn=None)
             self.plot_dock.label.setText(name)
 
         self.full_layout = QVBoxLayout()
@@ -249,7 +255,7 @@ class DeviceReader(DeviceController):
         self._layout.addWidget(self.active_button)
         self._layout.addWidget(self.log_button)
 
-        self.makeFrame(menu_fn=self.open_settings)
+        self.makeFrame(menu_fn=menu_fn)
         self.full_layout.addLayout(self._layout)
         if has_plot:
             self.full_layout.addWidget(self.plot_widget)
