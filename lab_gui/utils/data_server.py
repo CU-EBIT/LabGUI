@@ -292,8 +292,8 @@ class BaseDataServer:
                         to_log = BaseDataServer.pending_save[key]
                     else:
                         BaseDataServer.pending_save[key] = to_log
-                
-                to_log.append(value)
+                    to_log.append(value)
+                    
                 if key in callback_targets:
                     targets = callback_targets[key]
                     for pair in targets:
@@ -381,6 +381,17 @@ class BaseDataServer:
     
 class DataSaver:
 
+    def get_value_len(value):  
+        try:
+            from .data_client import TYPES
+        except:
+            from data_client import TYPES      
+        id = value[0]
+        TYPE = TYPES[id - 1]
+        tst = TYPE()
+        length = tst.size()
+        return length
+
     def __init__(self) -> None:
         self.save_delay = 0.25
         self._running_ = False
@@ -404,6 +415,11 @@ class DataSaver:
                         file = open(filename, 'ab')
                         while(len(values)):
                             value = values.pop(0)
+                            # Ensure lenghth is correct
+                            size = DataSaver.get_value_len(value)
+                            if size != len(value):
+                                print(f"Value size error? {size} != {len(value)}, {key}, {value}")
+                                continue
                             file.write(value)
                         file.close()
                         file_stats = os.stat(filename)
@@ -415,7 +431,8 @@ class DataSaver:
                             else:
                                 os.rename(filename, filename_bak)
                             os.remove(filename)
-                    except:
+                    except Exception as err:
+                        print(f"Error while saving value: {err}")
                         pass
 
     def make_thread(self):
@@ -438,10 +455,6 @@ class LogLoader:
         self.min_free_space = min_free_space
 
     def _load_values(self, filename, file_end):
-        try:
-            from .data_client import TYPES
-        except:
-            from data_client import TYPES
         import numpy as np
             
         file = open(filename, 'rb')
@@ -450,13 +463,33 @@ class LogLoader:
 
         self.raw_values = vars
         id = vars[0]
-        TYPE = TYPES[id - 1]
-        tst = TYPE()
-        length = tst.size()
+        length = DataSaver.get_value_len(vars)
 
         number = len(vars) / length
         if number != int(number):
             raise RuntimeWarning("Wrong size in file!")
+            # _vars = b''
+            # shift = 0
+            # # print(f"Wrong size in file!, {number}, {file_end}")
+            # # Attempt to clean it anyway
+            # for i in range(int(number)):
+            #     l = i - shift
+            #     s = l * length
+            #     e = s + length
+            #     args = vars[s:e]
+            #     if args[0] != id:
+            #         for j in range(length):
+            #             if args[j] == id:
+            #                 shift = j
+            #                 l = i - shift
+            #                 s = l * length
+            #                 e = s + length
+            #                 args = vars[s:e]
+            #     _vars += args
+            # vars = _vars
+            # number = len(vars) / length
+            # if number != int(number):
+            #     return
 
         # numpy stuff from Tim
         vars = np.array(list(vars), dtype='uint8')
@@ -617,6 +650,8 @@ class LogServer:
 
         x, y = log.load()
         if x is None:
+            with self.log_lock:
+                del self.logs[key]
             return b'error!'
         
         now = time.time()
@@ -673,7 +708,14 @@ class LogServer:
             conn.close()  # close the connection
             return
         try:
+
+            if data.startswith(HELLO):
+                conn.send(HELLO_FROM_SERVER)
+                conn.close()  # close the connection
+                return
+            
             data = data.decode()
+
             values = json.loads(data)
 
             # Key not found exception caught below.
@@ -696,7 +738,7 @@ class LogServer:
             else:
                 conn.send(b'error!')
         except Exception as err:
-            print(f'Error in request {err}')
+            print(f'Error in logs request {err}, {data}')
             conn.send(b'error!')
         conn.close()
 
@@ -765,8 +807,32 @@ def make_log_thread(addr=("0.0.0.0", 0)):
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == 'logs':
-        (server, thread) = make_log_thread()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog='Data Server',
+        description='Server for holding/providing data values for LabGUI')
+    
+    parser.add_argument('-m', '--mode')
+    parser.add_argument('-k', '--key')
+    parser.add_argument('-l', '--log_port')
+    parser.add_argument('-t', '--tcp_port')
+    parser.add_argument('-u', '--udp_port')
+
+    args = parser.parse_args()
+
+    port_log = 0 if not args.log_port else int(args.log_port)
+    port_tcp = 0 if not args.tcp_port else int(args.tcp_port)
+    port_udp = 0 if not args.udp_port else int(args.udp_port)
+    if args.key:
+        ServerProvider.server_key = args.key
+
+    addr_log = ("0.0.0.0", port_log)
+    addr_tcp = ("0.0.0.0", port_tcp)
+    addr_udp = ("0.0.0.0", port_udp)
+
+    if args.mode == 'logs':
+        (server, thread) = make_log_thread(addr_log)
         if len(sys.argv) > 2:
             ServerProvider.server_key = sys.argv[2]
         # Now start the provider thread who says where the server is
@@ -776,12 +842,14 @@ if __name__ == "__main__":
         input("")
         server._running_ = False
         time.sleep(0.5)
-    elif len(sys.argv) > 1 and sys.argv[1] == 'tests':
-        ServerProvider.server_key = 'local_test'
-        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
+    elif args.mode == 'tests':
+        if not args.key:
+            ServerProvider.server_key = 'local_test'
+        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads(addr_tcp, addr_udp)
         (server, thread) = make_log_thread()
         # Now start the provider thread who says where the server is
-        BaseDataServer.provider_thread.start()
+        if ServerProvider.server_key != "None":
+            BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
         server_tcp._running_ = False
@@ -791,9 +859,10 @@ if __name__ == "__main__":
         time.sleep(0.5)
     else:
         # construct a server
-        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
+        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads(addr_tcp, addr_udp)
         # Now start the provider thread who says where the server is
-        BaseDataServer.provider_thread.start()
+        if ServerProvider.server_key != "None":
+            BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
         server_tcp._running_ = False

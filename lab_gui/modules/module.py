@@ -104,11 +104,16 @@ class SettingOption:
                 float(attr)
                 ufmt = float
                 fmt = "{:.2f}"
-                if key in thing._opt_fmts_:
-                    fmt = thing._opt_fmts_[key]
                 if isinstance(attr, int):
                     fmt = "{:d}"
                     ufmt = int
+                elif isinstance(attr, str):
+                    fmt = "{}"
+                    ufmt = str
+                if key in thing._opt_fmts_:
+                    fmt = thing._opt_fmts_[key]
+                if hasattr(thing, "_opt_ufmts_") and key in thing._opt_ufmts_:
+                    ufmt = thing._opt_ufmts_[key]
                 fmtter = lambda x: fmt.format(x)
                 def update():
                     self.set_value(self.get_value())
@@ -571,40 +576,40 @@ def update_values():
         import time
         found = False
 
-        if data_client.DATA_SERVER_KEY is None:
-            data_client.DATA_SERVER_KEY = "LabGUI"
+        if BaseDataClient.DATA_SERVER_KEY is None:
+            BaseDataClient.DATA_SERVER_KEY = "LabGUI"
 
-        if data_client.DATA_SERVER_KEY is not None:
-            data_client.ADDR = data_client.find_server(data_client.DATA_SERVER_KEY, 'tcp', default_addr=None)
-            data_client.DATA_LOG_HOST = data_client.find_server(data_client.DATA_SERVER_KEY, 'log', default_addr=None)
-            if data_client.ADDR is not None:
+        if BaseDataClient.DATA_SERVER_KEY is not None:
+            BaseDataClient.ADDR = data_client.find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp', default_addr=None)
+            BaseDataClient.DATA_LOG_HOST = data_client.find_server(BaseDataClient.DATA_SERVER_KEY, 'log', default_addr=None)
+            if BaseDataClient.ADDR is not None:
                 found = True
 
         if not found:
             print("Making Server!")
             (server_tcp, _), (server_udp, _), (saver, _) = server.make_server_threads()
             (server_logs, _) = server.make_log_thread()
-            server.ServerProvider.server_key = data_client.DATA_SERVER_KEY
+            server.ServerProvider.server_key = BaseDataClient.DATA_SERVER_KEY
             # Now start the provider thread who says where the server is
             server.BaseDataServer.provider_thread.start()
             time.sleep(0.5)
             local_server = (server_tcp, server_udp, saver, server_logs)
-            data_client.ADDR = data_client.find_server(data_client.DATA_SERVER_KEY, 'tcp', default_addr=None)
-            data_client.DATA_LOG_HOST = data_client.find_server(data_client.DATA_SERVER_KEY, 'log', default_addr=None)
-            print(data_client.ADDR)
+            BaseDataClient.ADDR = data_client.find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp', target_ip='127.0.0.1')
+            BaseDataClient.DATA_LOG_HOST = data_client.find_server(BaseDataClient.DATA_SERVER_KEY, 'log', target_ip='127.0.0.1')
+            print(BaseDataClient.ADDR)
         else:
             local_server = False
 
-    base_control_widgets.callbacks = ValueListener(data_client.ADDR)
+    base_control_widgets.callbacks = ValueListener(BaseDataClient.ADDR)
 
 class ClientWrapper(BaseDataClient):
 
     def __init__(self) -> None:
-        super().__init__(data_client.ADDR)
+        super().__init__()
 
 class ValueListener(DataCallbackServer):
 
-    def __init__(self, client_addr=data_client.ADDR):
+    def __init__(self, client_addr=BaseDataClient.ADDR):
         super().__init__(client_addr=client_addr)
         self.values = {}
 

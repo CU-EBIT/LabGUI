@@ -2,7 +2,7 @@
 
 ### If running a server manually, replace the key below with the one your server uses
 import lab_gui.utils.data_client as data_client
-data_client.DATA_SERVER_KEY = "LabGUI"
+data_client.BaseDataClient.DATA_SERVER_KEY = "LabGUI"
 ### If you have multiple servers running, change the lookup port as follows:
 import lab_gui.utils.data_server as server
 server.ServerProvider.PORT = 1234
