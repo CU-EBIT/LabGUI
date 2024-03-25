@@ -475,7 +475,7 @@ class BaseDataClient:
         self.connection = None
         self.tcp = True
         self.addr = addr
-        self.io_lock = False
+        self.io_lock = threading.Lock()
         self.custom_port = -1
         self.root_port = addr[1] if addr is not None else -1
         self.reads = {}
@@ -488,14 +488,6 @@ class BaseDataClient:
         if self.tcp and self.custom_port != -1:
             self.init_connection()
             self.close()
-
-    def lock(self):
-        while(self.io_lock):
-            time.sleep(0.001)
-        self.io_lock = True
-
-    def unlock(self):
-        self.io_lock = False
 
     def change_port(self, port):
         '''Changes the port we connect over'''
@@ -512,10 +504,12 @@ class BaseDataClient:
                 return
             self.addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp' if self.tcp else 'udp')
         if self.addr is None:
+            print(f'No Address Found?')
             return
         
         if self.connection is not None:
             self.close(on_fail)
+
         if self.tcp:
             self.connection = socket.socket()
             self.connection.connect(self.addr)
@@ -551,12 +545,11 @@ class BaseDataClient:
             print(f'error registering a callback? {err} for {key}')
 
     def send_msg(self, msg):
-        self.lock()
-        if self.connection == None or self.tcp:
-            self.init_connection()
-        self.connection.sendto(msg, self.addr)
-        msgFromServer = self.connection.recvfrom(BUFSIZE)
-        self.unlock()
+        with self.io_lock:
+            if self.connection == None or self.tcp:
+                self.init_connection()
+            self.connection.sendto(msg, self.addr)
+            msgFromServer = self.connection.recvfrom(BUFSIZE)
         return msgFromServer
 
     def select(self):
@@ -634,7 +627,7 @@ class BaseDataClient:
                     if unpacked == UNPACK_ERR:
                         if DEBUG:
                             print('resetting connection')
-                        self.init_connection()
+                        self.close(True)
                 except Exception as err:
                     msg = f'Error getting value for {key}! {err}'
                     # Timeouts can happen, so only print ones that did not
@@ -670,6 +663,9 @@ class BaseDataClient:
 
     def check_set(self, _, bytes):
         '''Checks if it was the set response message, also handles miss-applied get responses'''
+        if not len(bytes):
+            print('error, no bytes recieved!')
+            return False
         args = bytes.split(DALIM)
         data = args[0]
         if data == SUCCESS:
@@ -709,64 +705,64 @@ class BaseDataClient:
                 print('too long!')
             return False
         try:
-            # If so, try to sent to server
-            if self.connection == None or self.tcp:
-                self.init_connection()
-            self.connection.sendto(bytesToSend, self.addr)
-            msgFromServer = self.connection.recvfrom(BUFSIZE)
+            # If so, try to send to server
+            msgFromServer = self.send_msg(bytesToSend)
             # And see if the server responded appropriately
             if self.check_set(key, msgFromServer[0]):
                 return True
         except Exception as err:
-            print(f"Error on set: {err}")
+            import traceback
+            print(f"Error on set: {err}, {self.connection}, {self.tcp}")
+            traceback.print_tb(err.__traceback__)
             self.close(True)
             pass
         return False
 
     def get_all(self):
         '''Requests all values from server, returns a map of all found values. This map may be incomplete due to lost packets.'''
-        self.values = {}
-        if self.connection == None or self.tcp:
-            self.init_connection()
-        self.connection.sendto(all_request, self.addr)
+        with self.io_lock:
+            self.values = {}
+            if self.connection == None or self.tcp:
+                self.init_connection()
+            self.connection.sendto(all_request, self.addr)
 
-        msg = b''
-        if self.tcp:
-            try:
-                _msg = self.connection.recvfrom(BUFSIZE)[0]
-                msg = _msg
-
-                while _msg != b'':
+            msg = b''
+            if self.tcp:
+                try:
                     _msg = self.connection.recvfrom(BUFSIZE)[0]
-                    msg = msg + _msg
-                
-                done = False
-                while not done:
-                    next_dalim = msg.index(DALIM)
-                    key = msg[0:next_dalim]
-                    if key[2:] != b'success!':
-                        if key == b'':
-                            break
-                        size = (key[0]&31) + ((key[1]&31) << 5)
-                        value = msg[0: size + 2]
-                        data = value
-                        msg = msg[size + 2:]
-                        success, key, unpacked = unpack_value(data)
-                        if success:
-                            self.values[key] = unpacked
-                    else:
+                    msg = _msg
+
+                    while _msg != b'':
+                        _msg = self.connection.recvfrom(BUFSIZE)[0]
+                        msg = msg + _msg
+                    
+                    done = False
+                    while not done:
+                        next_dalim = msg.index(DALIM)
+                        key = msg[0:next_dalim]
+                        if key[2:] != b'success!':
+                            if key == b'':
+                                break
+                            size = (key[0]&31) + ((key[1]&31) << 5)
+                            value = msg[0: size + 2]
+                            data = value
+                            msg = msg[size + 2:]
+                            success, key, unpacked = unpack_value(data)
+                            if success:
+                                self.values[key] = unpacked
+                        else:
+                            done = True
+                        done = done or msg == b''
+                except KeyboardInterrupt:
+                    pass
+                except Exception as err:
+                    _msg = f'Error getting all value! {err}, {msg}'
+                    if 'timed out' in _msg:
                         done = True
-                    done = done or msg == b''
-            except KeyboardInterrupt:
-                pass
-            except Exception as err:
-                _msg = f'Error getting all value! {err}, {msg}'
-                if 'timed out' in _msg:
-                    done = True
-                elif DEBUG:
-                    print(_msg)
-                self.close(True)
-        return self.values
+                    elif DEBUG:
+                        print(_msg)
+                    self.close(True)
+            return self.values
     
 if __name__ == "__main__":
     finder = ServerFinder('tcp')
