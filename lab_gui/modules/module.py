@@ -286,7 +286,11 @@ class Module:
         help_fn = None
         menu_fn = None
         if len(self.get_settings()):
-            menu_fn = self.open_settings
+            def _left_click():
+                self.open_settings(False)
+            def _right_click():
+                self.open_settings(True)
+            menu_fn = (_left_click, _right_click)
         if self._help_main:
             help_fn = self.open_help
 
@@ -302,7 +306,7 @@ class Module:
         self._dock_area.addDock(self._dock, self.placement)
         self._dock.sigClosed.connect(self.dock_closed)
 
-    def open_settings(self):
+    def open_settings(self, new_window=False):
         for setting in self.get_settings():
             key = setting._label
             callback = setting._callback
@@ -312,7 +316,7 @@ class Module:
                         setting._callback()
                     self.save()
                 callback = wrapped
-            self._root.edit_options(self._dock, setting, key, callback)
+            self._root.edit_options(self._dock, setting, key, callback, new_window=new_window)
 
     def open_help(self):
         self._root.help_settings(*self._help_main)
