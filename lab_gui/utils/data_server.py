@@ -807,8 +807,32 @@ def make_log_thread(addr=("0.0.0.0", 0)):
 
 if __name__ == "__main__":
     import sys
-    if len(sys.argv) > 1 and sys.argv[1] == 'logs':
-        (server, thread) = make_log_thread()
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog='Data Server',
+        description='Server for holding/providing data values for LabGUI')
+    
+    parser.add_argument('-m', '--mode')
+    parser.add_argument('-k', '--key')
+    parser.add_argument('-l', '--log_port')
+    parser.add_argument('-t', '--tcp_port')
+    parser.add_argument('-u', '--udp_port')
+
+    args = parser.parse_args()
+
+    port_log = 0 if not args.log_port else int(args.log_port)
+    port_tcp = 0 if not args.tcp_port else int(args.tcp_port)
+    port_udp = 0 if not args.udp_port else int(args.udp_port)
+    if args.key:
+        ServerProvider.server_key = args.key
+
+    addr_log = ("0.0.0.0", port_log)
+    addr_tcp = ("0.0.0.0", port_tcp)
+    addr_udp = ("0.0.0.0", port_udp)
+
+    if args.mode == 'logs':
+        (server, thread) = make_log_thread(addr_log)
         if len(sys.argv) > 2:
             ServerProvider.server_key = sys.argv[2]
         # Now start the provider thread who says where the server is
@@ -818,12 +842,14 @@ if __name__ == "__main__":
         input("")
         server._running_ = False
         time.sleep(0.5)
-    elif len(sys.argv) > 1 and sys.argv[1] == 'tests':
-        ServerProvider.server_key = 'local_test'
-        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
+    elif args.mode == 'tests':
+        if not args.key:
+            ServerProvider.server_key = 'local_test'
+        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads(addr_tcp, addr_udp)
         (server, thread) = make_log_thread()
         # Now start the provider thread who says where the server is
-        BaseDataServer.provider_thread.start()
+        if ServerProvider.server_key != "None":
+            BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
         server_tcp._running_ = False
@@ -833,9 +859,10 @@ if __name__ == "__main__":
         time.sleep(0.5)
     else:
         # construct a server
-        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads()
+        (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads(addr_tcp, addr_udp)
         # Now start the provider thread who says where the server is
-        BaseDataServer.provider_thread.start()
+        if ServerProvider.server_key != "None":
+            BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
         server_tcp._running_ = False
