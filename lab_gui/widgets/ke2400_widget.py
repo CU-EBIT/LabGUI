@@ -132,7 +132,7 @@ class IVCurveWidget(KE2400Mode):
         self.do_sweep = False
         super().on_deactivate()
 
-    def do_loop(self):
+    def on_run_loop(self):
         
         with self.parent.lock:
             try:
@@ -367,7 +367,7 @@ class MeasureCurrentWidget(KE2400Mode):
 
         self.outer_layout.addLayout(self.V_line._layout)
 
-    def do_loop(self):
+    def on_run_loop(self):
         _, active = get_tracked_value(self.V_On)
         device = self.parent.device
         _, V_Set = get_tracked_value(self.V_Set)
@@ -595,5 +595,5 @@ class KE2400(DeviceReader):
     def do_device_update(self):
         for mode in self.modes:
             if mode.is_active():
-                mode.do_loop()
+                mode.on_run_loop()
                 break
