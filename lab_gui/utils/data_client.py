@@ -361,6 +361,8 @@ class DataCallbackServer:
         self.port = self.connection.getsockname()[1]
         self.connection.listen(8)
 
+        self.alive_lock = threading.Lock()
+
         self.listeners = {}
         self.last_heard_times = {}
 
@@ -402,7 +404,8 @@ class DataCallbackServer:
     def add_listener(self, key, listener):
         if not key in self.listeners:
             self.listeners[key] = []
-        self.last_heard_times[key] = 0
+        with self.alive_lock:
+            self.last_heard_times[key] = 0
         listeners = self.listeners[key]
         if not listener in listeners:
             listeners.append(listener)
@@ -411,7 +414,8 @@ class DataCallbackServer:
 
     def handle_msg(self, message):
         success, key, unpacked = unpack_value(message)
-        self.last_heard_times[key] = time.time()
+        with self.alive_lock:
+            self.last_heard_times[key] = time.time()
         if success and key in self.listeners:
             for listener in self.listeners[key]:
                 listener(key, unpacked)
@@ -438,23 +442,24 @@ class DataCallbackServer:
             time.sleep(1)
             keys = []
             now = time.time()
-            for key, last_time in self.last_heard_times.items():
-                if now - last_time > 10:
-                    keys.append(key)
-            if len(keys):
-                try:
-                    if BaseDataClient.DATA_SERVER_KEY is not None:
-                        addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp')
-                    else:
-                        addr = self.client_addr
-                    client = BaseDataClient(addr)
-                    client.init_connection()
-                    for key in keys:
-                        self.last_heard_times[key] = now
-                        client.register_callback_server(key, self.port)
-                    client.close()
-                except Exception as err:
-                    print(f"Error in check alive: {err}")
+            with self.alive_lock:
+                for key, last_time in self.last_heard_times.items():
+                    if now - last_time > 10:
+                        keys.append(key)
+                if len(keys):
+                    try:
+                        if BaseDataClient.DATA_SERVER_KEY is not None:
+                            addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp')
+                        else:
+                            addr = self.client_addr
+                        client = BaseDataClient(addr)
+                        client.init_connection()
+                        for key in keys:
+                            self.last_heard_times[key] = now
+                            client.register_callback_server(key, self.port)
+                        client.close()
+                    except Exception as err:
+                        print(f"Error in check alive: {err}")
 
 class BaseDataClient:
 
