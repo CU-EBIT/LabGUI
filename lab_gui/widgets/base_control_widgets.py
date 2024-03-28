@@ -163,7 +163,7 @@ def addCrossHairs(plot_widget, coord_label=None, add_copy_event=True):
 def addDoubleClickCoordCopy(plot_widget):
     def mouseClicked(evt):
         try:
-            pos = evt.pos()
+            pos = evt.scenePos()
         except AttributeError:
             # This throws exception if double clicked outside of plot
             return
