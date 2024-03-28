@@ -125,7 +125,7 @@ def scale(dpi):
     """
     return dpi / 96
 
-def addCrossHairs(plot_widget, coord_label=None):
+def addCrossHairs(plot_widget, coord_label=None, add_copy_event=True):
     """Adds a coordinate tooltip similar to the crosshairs example from pyqtgraph
 
     Args:
@@ -146,7 +146,6 @@ def addCrossHairs(plot_widget, coord_label=None):
             x = mousePoint.x()
             y = mousePoint.y()
             if log:
-                import math
                 # Convert to log coords
                 y = 10 ** y
                 pass
@@ -157,7 +156,36 @@ def addCrossHairs(plot_widget, coord_label=None):
             coord_label.setText(f"x={x_msg}, y={y_msg}")
 
     plot_widget.scene().sigMouseMoved.connect(mouseMoved)
+    if add_copy_event:
+        addDoubleClickCoordCopy(plot_widget)
     return coord_label
+
+def addDoubleClickCoordCopy(plot_widget):
+    def mouseClicked(evt):
+        try:
+            pos = evt.pos()
+        except AttributeError:
+            # This throws exception if double clicked outside of plot
+            return
+        if evt.double() and plot_widget.sceneBoundingRect().contains(pos):
+            plot = plot_widget.getPlotItem()
+            vb = plot.vb
+            mousePoint = vb.mapSceneToView(pos)
+            log = plot.ctrl.logYCheck.isChecked()
+            x = mousePoint.x()
+            y = mousePoint.y()
+            if log:
+                # Convert to log coords
+                y = 10 ** y
+                pass
+            clipboard = QtGui.QGuiApplication.clipboard()
+            x_msg = f"{x:.3f}"
+            y_msg = f"{y:.3f}"
+            if y > 1e3 or y < 1e-1:
+                y_msg = f"{y:.3e}"
+            msg = f"x={x_msg}, y={y_msg}"
+            clipboard.setText(msg)
+    plot_widget.scene().sigMouseClicked.connect(mouseClicked)
 
 class FrameDockLabel(DockLabel):
     '''
