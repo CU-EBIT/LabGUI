@@ -124,19 +124,24 @@ def clear_plot(key, reload=False, start=None, end=0):
     if start is None:
         start = _preload_hours
 
-    _plots[key] = [
+    plot = [
         numpy.full(int(_max_points), datetime.now().timestamp()), # Times
         numpy.zeros(int(_max_points)), # Values
         numpy.zeros(int(_max_points)), # Averages
         False, # If setup yet
         0, # number of times rolled
+        True, # Whether we are clearing the plot
     ]
+    _plots[key] = plot
     # Only reload if the address is the "real" one, as to not load garbage during testing
     do_run = reload and can_access_logs()
     if do_run:
         pre_fill(key, start, end)
+    plot[5] = False
 
 def roll_plot_values(plots, value, timestamp):
+    if len(plots) > 5 and plots[5]:
+        return
     times = plots[0]
     values = plots[1]
     avgs = plots[2]
@@ -171,6 +176,8 @@ def get_values(first:bool, key:str):
                 pre_fill(key, _preload_hours, 0)
             else:
                 plots = _plots[key]
+                if len(plots) > 5 and plots[5]:
+                    return
                 times = plots[0]
                 last_stamp = times[-1]
                 
@@ -193,6 +200,8 @@ def get_values(first:bool, key:str):
     # Now try filling new value in
     
     plots = _plots[key]
+    if len(plots) > 5 and plots[5]:
+        return
     read = get_tracked_value(key)
     # Skip if not present
     if read is None:
@@ -334,7 +343,7 @@ class Settings(BaseSettings):
         }
 
         def refresh_pressed():
-            clear_plot(self.source_key, True,start=self.reload_hours)
+            clear_plot(self.source_key, True, start=self.reload_hours)
             if self._callback is not None:
                 self._callback()
 
@@ -654,7 +663,7 @@ class Plot(QWidget):
             plots = self.plots[n]
             n += 1
 
-            times, values, avgs, valid, rolled = self.get_data(key)
+            [times, values, avgs, valid, rolled, *_] = self.get_data(key)
 
             # Skip any invalid plots
             if not valid:
