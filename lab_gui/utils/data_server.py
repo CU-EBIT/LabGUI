@@ -57,7 +57,6 @@ class ServerProvider:
         self.addr = ("0.0.0.0", ServerProvider.PORT)
         self.connection = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.connection.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.connection.bind(self.addr)
         self.port = self.connection.getsockname()[1]
 
@@ -89,17 +88,20 @@ class ServerProvider:
                     port = int(data[head_len:].decode())
                 else:
                     msg = b'err'
+            except Exception as err:
+                print(f"Error reading request: {err}")
+            try:
                 if msg != b'' and port != -1:
                     connection = socket.socket()
                     addr = (addr[0], port)
                     print(f"Sending: {msg} to {addr}")
+                    connection.settimeout(0.25)
                     connection.connect(addr)
-                    connection.settimeout(0.5)
                     connection.sendto(msg, addr)
                     connection.shutdown(socket.SHUT_RDWR)
                     connection.close()
             except Exception as err:
-                print(f"Error reading request: {err}")
+                print(f"Error sending info: {err}")
 
 class BaseDataServer:
     '''Python server implementation'''
@@ -280,14 +282,19 @@ class BaseDataServer:
             if key in BaseDataServer.values and BaseDataServer.values[key][0] != value[0]:
                 resp = KEY_ERR_MSG
             else:
+
+                if DataSaver.get_value_len(value) != len(value):
+                    time.sleep(0.1)
+                    print("???", value, conn.recv(64))
+                    
                 if conn != None:
                     conn.send(resp)
                 else:
                     self.connection.sendto(resp, address)
 
                 BaseDataServer.values[key] = value
-                to_log = []
                 with BaseDataServer.save_lock:
+                    to_log = []
                     if key in BaseDataServer.pending_save:
                         to_log = BaseDataServer.pending_save[key]
                     else:
@@ -833,10 +840,9 @@ if __name__ == "__main__":
 
     if args.mode == 'logs':
         (server, thread) = make_log_thread(addr_log)
-        if len(sys.argv) > 2:
-            ServerProvider.server_key = sys.argv[2]
         # Now start the provider thread who says where the server is
         if ServerProvider.server_key != "None":
+            print("Starting Provider thread")
             BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
@@ -846,9 +852,10 @@ if __name__ == "__main__":
         if not args.key:
             ServerProvider.server_key = 'local_test'
         (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads(addr_tcp, addr_udp)
-        (server, thread) = make_log_thread()
+        (server, thread) = make_log_thread(addr_log)
         # Now start the provider thread who says where the server is
         if ServerProvider.server_key != "None":
+            print("Starting Provider thread")
             BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
@@ -860,12 +867,15 @@ if __name__ == "__main__":
     else:
         # construct a server
         (server_tcp, _), (server_udp, _), (saver, save_thread) = make_server_threads(addr_tcp, addr_udp)
+        (server, thread) = make_log_thread(addr_log)
         # Now start the provider thread who says where the server is
         if ServerProvider.server_key != "None":
+            print("Starting Provider thread")
             BaseDataServer.provider_thread.start()
         # Then wait for enter to be pressed before stopping
         input("")
         server_tcp._running_ = False
         server_udp._running_ = False
+        server._running_ = False
         server_tcp.close()
         time.sleep(0.5)
