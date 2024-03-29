@@ -41,9 +41,6 @@ class PlotModule(FigureModule):
         self.plots = {}
 
         self.plot_widget.setup()
-        def check_key():
-            self.update_settings()
-        self.plot_widget.tick_callback = check_key
 
         self.set_saves("Comparison Plotter")
 
@@ -51,11 +48,20 @@ class PlotModule(FigureModule):
         self.settings._options_ = {}
         self.settings._option_defaults_ = {}
         self.settings._buttons_ = []
+        self.settings._options_callbacks_ = {}
+        self.settings._opt_fmts_ = {}
+        self.settings._units_ = {}
         stale_settings = [key for key in self.settings._names_.keys()]
+        stale_settings.remove('update_rate')
+        stale_settings.remove('paused')
+        stale_settings.remove('scale')
 
         for setting in stale_settings:
             if setting in self.settings._names_:
                 del self.settings._names_[setting]
+            if hasattr(self.settings, setting):
+                delattr(self.settings, setting)
+        self.settings._default_option = False
 
         def add_option(key, header, unit=None, default=None, dropdown=False):
             setattr(self.settings, key, default)
@@ -87,6 +93,7 @@ class PlotModule(FigureModule):
         return
     
     def set_plot_values(self):
+        print("Updating plot")
         self.plots = {}
         self.plot_widget._has_value = False
         def check_empty(x):
@@ -119,32 +126,36 @@ class PlotModule(FigureModule):
             return
 
         x_times = np.array([parser.parse(val[0]).timestamp() for val in x_data])
-        x_value = np.array([val[1] for val in x_data])
+        x_values = np.array([val[1] for val in x_data])
 
         _, y_data = get_value_log(y_value, since=last + self.settings.y_phase, until=end + self.settings.y_phase)
         y_times = np.array([parser.parse(val[0]).timestamp() - self.settings.y_phase for val in y_data])
-        y_value = np.array([val[1] for val in y_data])
+        y_values = np.array([val[1] for val in y_data])
 
         t_min = np.ceil(max(x_times[0], y_times[0]))
         t_max = np.floor(min(x_times[-1], y_times[-1]))
+
+        self.plot_widget.set_axis_label("x", x_value)
+        self.plot_widget.set_axis_label("y", y_value)
         
         if y_2_value is not None:
             _, y_2_data = get_value_log(y_2_value, since=last + self.settings.y_2_phase, until=end + self.settings.y_2_phase)
             y_2_times = np.array([parser.parse(val[0]).timestamp() - self.settings.y_2_phase for val in y_2_data])
-            y_2_value = np.array([val[1] for val in y_2_data])
+            y_2_values = np.array([val[1] for val in y_2_data])
 
             t_min = np.ceil(max(t_min, y_2_times[0]))
             t_max = np.floor(min(t_max, y_2_times[-1]))
 
         bins = np.arange(t_min, t_max, self.settings.time_bin)
-        means_x, _, _ = scipy.stats.binned_statistic(x_times, x_value, bins=bins)
-        means_y, _, _ = scipy.stats.binned_statistic(y_times, y_value, bins=bins)
+        means_x, _, _ = scipy.stats.binned_statistic(x_times, x_values, bins=bins)
+        means_y, _, _ = scipy.stats.binned_statistic(y_times, y_values, bins=bins)
 
         self.plots["y_value"] = [means_x, means_y, means_y, True, 0]
 
         if y_2_value is not None:
-            means_y2,_ ,_ = scipy.stats.binned_statistic(y_2_times, y_2_value, bins=bins)
+            means_y2,_ ,_ = scipy.stats.binned_statistic(y_2_times, y_2_values, bins=bins)
             self.plots["y_2_value"] = [means_x, means_y2, means_y2, True, 0]
+            self.plot_widget.set_axis_label("y_2", y_2_value)
         self.plot_widget._has_value = True
 
 
