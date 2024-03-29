@@ -319,7 +319,6 @@ class Settings(BaseSettings):
             if chosen == 'None' or chosen.strip() == '':
                 chosen = None
             self.source_key = chosen
-            self._default_option = self.source_key
             if chosen is not None and chosen in self._option_defaults_:
                 defs = self._option_defaults_[chosen]
                 self.axis_name = defs[0]
@@ -383,8 +382,9 @@ class Settings(BaseSettings):
     
     def get_value(self):
         ret = (None, None, None)
-        if self.source_key in _plots:
-            ret = _plots[self.source_key]
+        if hasattr(self, 'source_key'):
+            if self.source_key in _plots:
+                ret = _plots[self.source_key]
         return ret
     
     def make_option_dropdown(self, setting, key):
@@ -399,7 +399,9 @@ class Settings(BaseSettings):
             _map = client.get_all()
             option = setting._option
             old_selected = setting.get_value()
-
+            if not old_selected or len(old_selected) == 0:
+                old_selected = getattr(self, key)
+            
             keys = []
             for _key, value in _map.items():
                 if value != None and isinstance(value[1], float):
@@ -456,9 +458,10 @@ class Settings(BaseSettings):
         for key in values.keys():
             if hasattr(self, key) and key in self._names_:
                 setattr(self, key, values[key])
-        if self.source_key == 'None' or self.source_key.strip() == '':
-            self.source_key = None
-        self._default_option = self.source_key
+        if hasattr(self, 'source_key'):
+            if self.source_key == 'None' or self.source_key.strip() == '':
+                self.source_key = None
+            self._default_option = self.source_key
 
 plot_colours = [(245,102,0), (185,71,0), (84,98,35), (239,219,178)]
 avgs_colours = [(82,45,128), (46,26,71), (0,32,91), (0,94,184)]
