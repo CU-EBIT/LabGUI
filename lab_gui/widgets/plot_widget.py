@@ -217,7 +217,7 @@ __threads__ = {} # Cache of threads to prevent the GC from eating them
 __update_rate_ = 2.5e-1
 
 def run_plot_thread(key):
-    if key in __threads__:
+    if key in __threads__ or key is None:
         return
     cache = [None, True, time.time()]
     __threads__[key] = cache
@@ -316,9 +316,11 @@ class Settings(BaseSettings):
         def opt_changed(*_):
             '''Updates things when the dropdown list is changed'''
             chosen = self._entries_['source_key'].get_value()
+            if chosen == 'None' or chosen.strip() == '':
+                chosen = None
             self.source_key = chosen
             self._default_option = self.source_key
-            if chosen in self._option_defaults_:
+            if chosen is not None and chosen in self._option_defaults_:
                 defs = self._option_defaults_[chosen]
                 self.axis_name = defs[0]
                 self.scale = defs[1]
@@ -343,7 +345,10 @@ class Settings(BaseSettings):
         }
 
         def refresh_pressed():
-            clear_plot(self.source_key, True, start=self.reload_hours)
+            if self.source_key == 'None' or self.source_key.strip() == '':
+                self.source_key = None
+            if self.source_key is not None:
+                clear_plot(self.source_key, True, start=self.reload_hours)
             if self._callback is not None:
                 self._callback()
 
@@ -403,6 +408,7 @@ class Settings(BaseSettings):
             while option.count():
                 option.removeItem(0)
             keys.sort()
+            keys.insert(0, 'None')
             opt_fmt = None
             if key in self._opt_fmts_:
                 opt_fmt = self._opt_fmts_[key][0]
@@ -450,6 +456,8 @@ class Settings(BaseSettings):
         for key in values.keys():
             if hasattr(self, key) and key in self._names_:
                 setattr(self, key, values[key])
+        if self.source_key == 'None' or self.source_key.strip() == '':
+            self.source_key = None
         self._default_option = self.source_key
 
 plot_colours = [(245,102,0), (185,71,0), (84,98,35), (239,219,178)]
@@ -470,6 +478,7 @@ class Plot(QWidget):
         self.start_index = 0
         self.last_stamp = 0.0
         self.last_label = None
+        self._has_value = False
 
         self.keys = []  # Array of keys we plot from, as (key, label_raw, label_smooth)
         self.plots = [] # Array of tuples of (plot_raw, plot_smooth)
@@ -622,6 +631,34 @@ class Plot(QWidget):
 
     def get_data(self, key):
         return _plots[key]
+    
+    def set_axis_label(self, axis, label):
+        if axis == 'x':
+            axis = 'bottom'
+        elif axis == 'y':
+            axis = 'left'
+        elif axis == 'y_2':
+            axis = 'right'
+
+        self.plot_widget.setLabel(axis, label)
+
+    def set_plot_title(self, label):
+        self.plot_widget.setTitle(label)
+
+    def refresh_from_settings(self):
+        if self.last_label != self.settings.axis_name \
+        or self.y_axis.logMode != self.settings.log_scale \
+        or self.y_axis.tick_fmt != self.settings.y_axis_fmt:
+            self.y_axis.tick_fmt = self.settings.y_axis_fmt
+            self.y_2_axis.tick_fmt = self.settings.y_axis_fmt
+            self.plot_widget.getPlotItem().ctrl.logYCheck.setChecked(self.settings.log_scale)
+            # self.y_axis.setLogMode(False, self.settings.log_scale)
+            if self.label_y:
+                self.set_axis_label('y', self.settings.axis_name)
+            if self.label_x:
+                self.set_axis_label('x', self.label_x)
+            self.last_label = self.settings.axis_name
+            self.plot_widget.updateLogMode()
 
     def animate_fig(self, *_):
         '''Primary animation loop'''
@@ -642,19 +679,7 @@ class Plot(QWidget):
             return
         
         # Update labels if they have changed
-        if self.last_label != self.settings.axis_name \
-        or self.y_axis.logMode != self.settings.log_scale \
-        or self.y_axis.tick_fmt != self.settings.y_axis_fmt:
-            self.y_axis.tick_fmt = self.settings.y_axis_fmt
-            self.y_2_axis.tick_fmt = self.settings.y_axis_fmt
-            self.plot_widget.getPlotItem().ctrl.logYCheck.setChecked(self.settings.log_scale)
-            # self.y_axis.setLogMode(False, self.settings.log_scale)
-            if self.label_y:
-                self.plot_widget.setLabel('left', self.settings.axis_name)
-            if self.label_x:
-                self.plot_widget.setLabel('bottom', self.label_x)
-            self.last_label = self.settings.axis_name
-            self.plot_widget.updateLogMode()
+        self.refresh_from_settings()
         
         n = 0
         
@@ -697,4 +722,4 @@ class Plot(QWidget):
         # If we only have 1 thing to plot, set the plot title based on values of that thing
         if len(self.keys)==1:
             label = self.settings.title_fmt.format(values[-1])
-            self.plot_widget.setTitle(label)
+            self.set_plot_title(label)

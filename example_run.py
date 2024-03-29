@@ -56,8 +56,12 @@ if __name__ == '__main__':
     main_gui.__modules__.append(control_module.MainModule)
     
     from lab_gui.modules import live_plot
-    # Finally add a live_plot, as an example of a different type of
+    # Finally add a live_plot, for testing live plotting updates
     main_gui.__modules__.append(live_plot.PlotModule)
+    
+    from lab_gui.modules import comparison_plot
+    # next add a comparison_plot, for testing comparing data values
+    main_gui.__modules__.append(comparison_plot.PlotModule)
 
     # Start the gui
     main_gui.start()
