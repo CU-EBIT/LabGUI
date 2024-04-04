@@ -194,6 +194,8 @@ def unpack_value(bytes):
     if key == KEY_ERR:
         return False, key, KEY_ERR
     data = args[1]
+    for i in range(2, len(args)):
+        data = data + DALIM + args[i]
     # If data was "ALL", then it means it was an end of ALL message, so return that
     if data == ALL:
         return False, key, ALL
@@ -217,8 +219,7 @@ def unpack_value(bytes):
         return True, key, value
     except Exception as err:
         # Otherwise print error and return unpack error
-        if DEBUG:
-            print(f'Error unpacking value {key}: {err}, {bytes}')
+        print(f'Error unpacking value {key}: {err}, {args}')
         return False, key, UNPACK_ERR
 
 def set_msg(key, timestamp, value):
@@ -675,8 +676,13 @@ class BaseDataClient:
         data = args[0]
         if data == SUCCESS:
             return True
+        if data == KEY_ERR:
+            return False
         # Otherwise might be a get value return
-        _, _key2, unpacked = unpack_value(bytes[0])
+        try:
+            _, _key2, unpacked = unpack_value(bytes[0])
+        except:
+            print(bytes, data)
         if _key2 in self.reads:
             if DEBUG:
                 print('error, duplate return!')
@@ -709,6 +715,7 @@ class BaseDataClient:
             if DEBUG:
                 print('too long!')
             return False
+        msgFromServer = None
         try:
             # If so, try to send to server
             msgFromServer = self.send_msg(bytesToSend)
@@ -717,7 +724,7 @@ class BaseDataClient:
                 return True
         except Exception as err:
             import traceback
-            print(f"Error on set: {err}, {self.connection}, {self.tcp}")
+            print(f"Error on set: {err}, {self.connection}, {self.tcp}, {msgFromServer}")
             traceback.print_tb(err.__traceback__)
             self.close(True)
             pass

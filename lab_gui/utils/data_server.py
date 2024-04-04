@@ -516,13 +516,16 @@ class LogLoader:
             self.times.append(t)
         for v in values:
             self.values.append(v)
-
-        while len(self.times) > 2 and self.times[-1] - self.times[0] > self.max_dt:
-            self.times.pop(0)
-            self.values.pop(0)
         
         self._np_t = np.array(self.times)
         self._np_v = np.array(self.values)
+
+        if len(self._np_t) > 2:
+            min_index = np.searchsorted(self._np_t, self._np_t[-1] - self.max_dt)
+            self._np_t = self._np_t[min_index:]
+            self._np_v = self._np_v[min_index:]
+            self.times = [t for t in self._np_t]
+            self.values = [v for v in self._np_v]
 
     def check_old_dir(self):
         # Check if a file was put in there.
@@ -644,6 +647,7 @@ class LogServer:
         return resps
     
     def update_values(self, key, last_point=None, end=None, skip_points=1):
+        import numpy as np
         import datetime
         from dateutil import parser
 
@@ -687,9 +691,10 @@ class LogServer:
             else:
                 start = parser.parse(last_point).timestamp()
 
-        mask = (x>=start)&(x<=end)
-        x = x[mask]
-        y = y[mask]
+        start = np.searchsorted(x, start)
+        end = np.searchsorted(x, end)
+        x = x[start:end]
+        y = y[start:end]
 
         if skip_points > 1 and len(x) > skip_points:
             x = x[::skip_points]
