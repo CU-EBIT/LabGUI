@@ -22,8 +22,10 @@ from ..utils.data_server import LogServer
 from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
 from .base_control_widgets import register_tracked_key, get_tracked_value
 
+LOG_ACCESS = True
+
 def can_access_logs():
-    return BaseDataClient.DATA_LOG_HOST != None
+    return LOG_ACCESS and BaseDataClient.DATA_LOG_HOST != None
 
 def get_value_log(key, start=1, end=0, since=None, until=None):
     '''
@@ -363,6 +365,7 @@ class Settings(BaseSettings):
         self.source_key = 'Pressure_HV_Source'
         self.axis_name = 'Source Pressure (mbar)'
         self.title_fmt = 'Latest: {:.2e}'
+        self.title_fmter = lambda x: self.title_fmt.format(x)
         self._default_option = self.source_key
 
         # A help string to show in the help menu
@@ -723,6 +726,6 @@ class Plot(QWidget):
             raw.setData(times, values)
 
         # If we only have 1 thing to plot, set the plot title based on values of that thing
-        if len(self.keys)==1:
+        if len(self.keys)==1 and len(values) > 1:
             label = self.settings.title_fmt.format(values[-1])
             self.set_plot_title(label)
