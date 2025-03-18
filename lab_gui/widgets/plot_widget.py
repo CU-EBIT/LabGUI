@@ -95,25 +95,19 @@ def pre_fill(key, start, end=0):
     # First get the all array, up to preload hours
     valid, array = get_value_log(key, start=start, end=end)
     if valid:
+        _array = numpy.array(array)
+        _x = _array[0]
+        _y = _array[1]
+        
         # If we were valid, stuff the values into the array,
         # We do have a maxiumum number of values of _max_points however
-        size = min(len(array), _max_points)
+        size = min(len(_x), _max_points)
 
-        val = array[0]
-        stamp = parser.parse(val[0]).timestamp() # timestamp is first value
-        val = val[1] # Actual value is second
+        times = numpy.full(int(_max_points), _x[0]) # Pre-populate array with the start values
+        values = numpy.full(int(_max_points), _y[0])
+        times[:size] = _x
+        values[:size] = _y
 
-        times = numpy.full(int(_max_points), stamp) # Pre-populate array with the start values
-        values = numpy.full(int(_max_points), val)
-
-        # Then fill in the rest of them
-        for i in range(1, size):
-            val = array[-i]
-            stamp = parser.parse(val[0]).timestamp()
-            val = val[1]
-            times[-i] = stamp
-            values[-i] = val
-            
         plots[0] = times
         plots[1] = values
         plots[2] = smooth_average(values)
@@ -149,17 +143,22 @@ def roll_plot_values(plots, value, timestamp):
     avgs = plots[2]
     existing = plots[3]
     if not existing: # First time we back-fill the arrays with initial value
-        times = numpy.full(int(_max_points), timestamp)
-        values = numpy.full(int(_max_points), value)
+        times = numpy.full(int(_max_points), timestamp[0])
+        values = numpy.full(int(_max_points), value[0])
         avgs = smooth_average(values)
         plots[3] = True
         plots[4] = 0 # clear rolled status
     else: # Otherwise we roll back the arrays, and append the new value to the end
-        times = numpy.roll(times,-1)
-        times[-1] = timestamp
-        values = numpy.roll(values,-1)
-        avgs = numpy.roll(avgs,-1)
-        values[-1] = value
+        timestamp = numpy.array(timestamp)
+        value = numpy.array(value)
+        
+        length = len(timestamp)
+        times = numpy.roll(times,-length)
+        values = numpy.roll(values,-length)
+        avgs = numpy.roll(avgs,-length)
+
+        times[-length:] = timestamp
+        values[-length:] = value
         plots[4] = plots[4] + 1 # Increment rolled status
     # Finally update the arrays
     avgs[-100:] = smooth_average(values[-200:])[-100:]
@@ -175,7 +174,10 @@ def get_values(first:bool, key:str):
             # Try pre-filling array
             # Only pre-fill if on the real address, and on first run
             if first:
-                pre_fill(key, _preload_hours, 0)
+                try:
+                    pre_fill(key, _preload_hours, 0)
+                except Exception as err:
+                    print(f'pre_fill Error {err}')
             else:
                 plots = _plots[key]
                 if len(plots) > 5 and plots[5]:
@@ -188,14 +190,10 @@ def get_values(first:bool, key:str):
                 if not valid:
                     print(f"Not valid for {key}")
                     return
-                for (time, value) in array:
-                    time = parser.parse(time).timestamp()
-                    if time == last_stamp:
-                        continue
-                    roll_plot_values(plots, value, time)
+                roll_plot_values(plots, array[1], array[0])
             return
         except Exception as err:
-            print(f'Value Prefill Error {err}')
+            print(f'get_values part 1 Error {err}')
 
     if first:
         register_tracked_key(key)
@@ -213,7 +211,7 @@ def get_values(first:bool, key:str):
     value = read[1]
     # Otherwise, only add if the timestamp has changed
     if timestamp != times[-1]:
-        roll_plot_values(plots, value, timestamp)
+        roll_plot_values(plots, [value], [timestamp])
 
 __threads__ = {} # Cache of threads to prevent the GC from eating them
 __update_rate_ = 2.5e-1
