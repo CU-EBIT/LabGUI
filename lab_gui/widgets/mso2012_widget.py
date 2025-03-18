@@ -32,6 +32,7 @@ class MSO2012(DeviceReader):
         super().__init__(parent, data_key=None, name=f"MSO2012", axis_title=f"Signal (V)")
 
         self.plot_data = {key:[[], [], [], False, 0] for key in channels}
+        self.raw_data = {key:[[],[[],[]]] for key in channels}
 
         self.addr = addr
         # Update settings scales so that the pA title is correct
@@ -58,6 +59,7 @@ class MSO2012(DeviceReader):
         self.plot_widget._has_value = True
         self.plot_widget.update_values = lambda*_:_
         self.plot_widget.get_data = self.get_data
+        self.plot_widget.settings.title_fmter = lambda x: ""
 
         self.plot_widget.keys = [[channel, channel, ""] for channel in self.channels]
 
@@ -84,13 +86,15 @@ class MSO2012(DeviceReader):
 
             self.x = {}
             self.y = {}
+        
+            self.logged_n = 0
 
             for channel in self.channels:
                 self.device.write(f'data:source {channel}')
                 # The below lines take 300-500ms to run, so only do it rarely
                 self.x[channel] = float(self.device.query('wfmoutpre:xincr?'))
-                self.y[channel] = float(self.device.query('wfmoutpre:ymult?'))
-                
+                self.y[channel] = float(self.device.query('wfmoutpre:ymult?'))*1e-0
+
             self.device.query('*OPC?') # block until data is present (supposedly, more manual delays to be safe)
         except Exception as err:
             print(f"Error opening MSO2012 {err}")
@@ -126,4 +130,30 @@ class MSO2012(DeviceReader):
         vars = numpy.array(vars) * self.y[channel]
         s = self.x[channel] * len(vars) * 1e6
         times = numpy.linspace(-s/2, s/2, num=len(vars))
-        return vars[0:-1], times[0:-1]
+        y, t = vars[0:-1], times[0:-1]
+
+        scans = self.raw_data[channel][0]
+        means = self.raw_data[channel][1]
+    
+        mean_n = 4
+        scans.append((t, y))
+        
+        means[0] = t
+        if len(scans) > mean_n:
+            means[1] = means[1] - scans[0][1] / mean_n
+            scans.pop(0)
+            means[1] = means[1] + y / mean_n
+            if self.logged_n % mean_n == 0 and self.do_log:
+                filename = self.get_log_file(self.name)
+                numpy.savetxt(filename, numpy.transpose(means), header=self.make_file_header())
+            self.logged_n = self.logged_n + 1
+        elif len(scans) == mean_n:
+            self.logged_n = 0
+            means[1] = scans[0][1] / mean_n
+            for i in range(1, len(scans)):
+                means[1] = means[1] + scans[i][1] / mean_n
+        else:
+            means[1] = y
+        y = means[1]
+
+        return y, t

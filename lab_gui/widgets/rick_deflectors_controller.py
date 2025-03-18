@@ -144,9 +144,12 @@ class RickDeflectors(DeviceController):
         time.sleep(0.1)
 
     def set_XV_1(self):
+        print("Set XV_1")
         try:
             self.X1_O = self.X1
             self.X1 = float(self.VX1.box.text())
+            self.client.set_float("Deflectors_XY4_1_X", self.X1)
+            print("Updated")
             self.saver.on_changed(self.VX1.box)
         except Exception as err:
             print(err)
@@ -155,6 +158,8 @@ class RickDeflectors(DeviceController):
         try:
             self.X2_O = self.X2
             self.X2 = float(self.VX2.box.text())
+            self.client.set_float("Deflectors_XY4_2_X", self.X2)
+            print("Updated")
             self.saver.on_changed(self.VX2.box)
         except Exception as err:
             print(err)
@@ -163,6 +168,8 @@ class RickDeflectors(DeviceController):
         try:
             self.Y1_O = self.Y1
             self.Y1 = float(self.VY1.box.text())
+            self.client.set_float("Deflectors_XY4_1_Y", self.Y1)
+            print("Updated")
             self.saver.on_changed(self.VY1.box)
         except Exception as err:
             print(err)
@@ -171,6 +178,8 @@ class RickDeflectors(DeviceController):
         try:
             self.Y2_O = self.Y2
             self.Y2 = float(self.VY2.box.text())
+            self.client.set_float("Deflectors_XY4_2_Y", self.Y2)
+            print("Updated")
             self.saver.on_changed(self.VY2.box)
         except Exception as err:
             print(err)

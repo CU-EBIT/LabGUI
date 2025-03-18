@@ -2,6 +2,7 @@
 PyQt5
 numpy
 pyqtgraph
+python-dateutil
 
 # The below depend on the modules used
 pyvisa

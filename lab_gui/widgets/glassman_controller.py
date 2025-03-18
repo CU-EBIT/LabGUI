@@ -12,7 +12,7 @@ class DualGlassman(DeviceController, BasicVoltageSource):
     """
     This controls 2 analog glassman power supplies, a 3kV and a 5kV one, using a usb NIDAQ
     """
-    def __init__(self, parent, name="Dual Glassman"):
+    def __init__(self, parent, name="Dual Glassman", set_keys=[None,None]):
         """
 
         Args:
@@ -20,6 +20,7 @@ class DualGlassman(DeviceController, BasicVoltageSource):
         """
         super().__init__(parent, name, fixed_size=True)
 
+        self.set_keys = set_keys
         self.V5kV = 0
         self.V5kV_O = self.V5kV
 
@@ -157,6 +158,9 @@ class DualGlassman(DeviceController, BasicVoltageSource):
         try:
             self.V5kV_O = self.V5kV
             self.V5kV = float(self.output_entry_5kV.box.text())
+            if self.set_keys[0] != None:
+                self.client.set_float(self.set_keys[0], self.V5kV)
+                print("Updated", self.set_keys[0])
             self.saver.on_changed(self.output_entry_5kV.box)
         except Exception as err:
             print(err)
@@ -170,6 +174,9 @@ class DualGlassman(DeviceController, BasicVoltageSource):
         try:
             self.V3kV_O = self.V3kV
             self.V3kV = float(self.output_entry_3kV.box.text())
+            if self.set_keys[1] != None:
+                self.client.set_float(self.set_keys[1], self.V3kV)
+                print("Updated", self.set_keys[1])
             self.saver.on_changed(self.output_entry_3kV.box)
         except Exception as err:
             print(err)
