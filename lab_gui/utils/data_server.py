@@ -653,7 +653,7 @@ class LogServer:
             else:
                 log = LogLoader(key, SAVE_DIR, BACK_DIR)
                 self.logs[key] = log
-                log.check_old_dir()
+                log.process_old_dir()
         
         now = time.time()
         if end is None:
@@ -782,7 +782,7 @@ class LogServer:
                         log = LogLoader(key, SAVE_DIR, BACK_DIR)
                         self.logs[key] = log
                 for log in self.logs.values():
-                    log.check_old_dir()
+                    log.process_old_dir()
 
             for _ in range(600):
                 time.sleep(0.1)
