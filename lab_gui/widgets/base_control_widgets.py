@@ -1077,6 +1077,8 @@ class ValuesAndPowerPolarity(ValuesAndPower):
         return x > 0
 
     def polarity_factor(self, x):
+        if self.polarity_button.value is None:
+            return 0
         if isinstance(self.polarity_button.value, bool):
             return -x if self.polarity_button.value else x
         return x * self.polarity_button.value
