@@ -465,6 +465,33 @@ class LogLoader:
         self.max_dt = max_dt
         self.min_free_space = min_free_space
 
+    def process_old_dir(self):
+        # Check if a file was put in there.
+        filename = self.old_dir + self.key + ".dat"
+        save_dir = self.old_dir + self.key
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+        if os.path.exists(filename):
+            # Copy it to a folder
+            # Name timestamp should be time for first entry in the file
+            file = open(filename, 'rb')
+            vars = file.read(16)
+            file.close()
+            vars = vars[1:9]
+            stamp = struct.unpack("d", vars)[0]
+            stamp = time.strftime('%Y-%m-%d_%H_%M_%S', time.localtime(stamp))
+            new_filename =  save_dir + f"/{self.key}_{stamp}.dat"
+            os.rename(filename, new_filename)
+
+            import shutil
+            _, _, free = shutil.disk_usage(new_filename)
+            if free < self.min_free_space:
+                files = os.listdir(save_dir)
+                files.sort()
+                oldest =  os.path.join(save_dir, files[0])
+                print(f"Warning, Removed old log due to lack of disk space! {oldest}")
+                os.remove(oldest)
+
     def _load_values(self, filename:str, file_end):
         import numpy as np
             
@@ -626,6 +653,7 @@ class LogServer:
             else:
                 log = LogLoader(key, SAVE_DIR, BACK_DIR)
                 self.logs[key] = log
+                log.process_old_dir()
         
         now = time.time()
         if end is None:
@@ -753,6 +781,8 @@ class LogServer:
                     if not key in self.logs:
                         log = LogLoader(key, SAVE_DIR, BACK_DIR)
                         self.logs[key] = log
+                for log in self.logs.values():
+                    log.process_old_dir()
 
             for _ in range(600):
                 time.sleep(0.1)
