@@ -7,6 +7,10 @@ import struct
 import os
 import json
 
+import numpy as np
+import datetime
+from dateutil import parser
+
 # Some standard message components
 DELIM = b'\x1e\x1e'
 DALIM = b'\x1d\x1d'
@@ -449,7 +453,7 @@ class DataSaver:
     
 class LogLoader:
 
-    def __init__(self, key, dir=SAVE_DIR, old_dir=BACK_DIR, max_dt=168*3600, min_free_space=500*1024**2) -> None:
+    def __init__(self, key, dir=SAVE_DIR, old_dir=BACK_DIR, max_dt=1e30, min_free_space=500*1024**2) -> None:
         self.key = key
         self.new_dir = dir
         self.old_dir = old_dir
@@ -461,70 +465,7 @@ class LogLoader:
         self.max_dt = max_dt
         self.min_free_space = min_free_space
 
-    def _load_values(self, filename, file_end):
-        import numpy as np
-            
-        file = open(filename, 'rb')
-        file.seek(file_end)
-        vars = file.read()
-
-        self.raw_values = vars
-        id = vars[0]
-        length = DataSaver.get_value_len(vars)
-
-        number = len(vars) / length
-        if number != int(number):
-            raise RuntimeWarning("Wrong size in file!")
-            # _vars = b''
-            # shift = 0
-            # # print(f"Wrong size in file!, {number}, {file_end}")
-            # # Attempt to clean it anyway
-            # for i in range(int(number)):
-            #     l = i - shift
-            #     s = l * length
-            #     e = s + length
-            #     args = vars[s:e]
-            #     if args[0] != id:
-            #         for j in range(length):
-            #             if args[j] == id:
-            #                 shift = j
-            #                 l = i - shift
-            #                 s = l * length
-            #                 e = s + length
-            #                 args = vars[s:e]
-            #     _vars += args
-            # vars = _vars
-            # number = len(vars) / length
-            # if number != int(number):
-            #     return
-
-        # numpy stuff from Tim
-        vars = np.array(list(vars), dtype='uint8')
-        vars = np.reshape(vars, (-1, length))
-
-        _times = vars[:,1:9].copy(order="C")
-        decode_time = lambda x: struct.unpack("d", x)[0]
-
-        if id == 1:
-            _values = vars[:,9:].copy(order="C")
-            decode_value = lambda x: struct.unpack("d", x)[0]
-
-        times = np.array([decode_time(x) for x in _times])
-        values = np.array([decode_value(x) for x in _values])
-
-        for t in times:
-            self.times.append(t)
-        for v in values:
-            self.values.append(v)
-
-        while len(self.times) > 2 and self.times[-1] - self.times[0] > self.max_dt:
-            self.times.pop(0)
-            self.values.pop(0)
-        
-        self._np_t = np.array(self.times)
-        self._np_v = np.array(self.values)
-
-    def check_old_dir(self):
+    def process_old_dir(self):
         # Check if a file was put in there.
         filename = self.old_dir + self.key + ".dat"
         save_dir = self.old_dir + self.key
@@ -551,8 +492,70 @@ class LogLoader:
                 print(f"Warning, Removed old log due to lack of disk space! {oldest}")
                 os.remove(oldest)
 
+    def _load_values(self, filename:str, file_end):
+        import numpy as np
+            
+        file = open(filename, 'rb')
+        file.seek(file_end)
+        vars = file.read()
+        file.close()
+
+        if filename.endswith('.dat_z'):
+            # These ones are compressed via zlib
+            import zlib
+            vars = zlib.decompress(vars)
+
+        self.raw_values = vars
+        id = vars[0]
+        length = DataSaver.get_value_len(vars)
+
+        number = len(vars) / length
+        if number != int(number):
+            raise RuntimeWarning("Wrong size in file!")
+
+        # numpy stuff from Tim
+        vars = np.fromiter(vars, dtype='uint8')
+        vars = np.reshape(vars, (-1, length))
+
+        _times = vars[:,1:9].copy(order="C")
+        decode_time = lambda x: struct.unpack("d", x)[0]
+
+        if id == 1:
+            _values = vars[:,9:].copy(order="C")
+            decode_value = lambda x: struct.unpack("d", x)[0]
+
+        times = [decode_time(x) for x in _times]
+        values = [decode_value(x) for x in _values]
+
+        for t in times:
+            self.times.append(t)
+        for v in values:
+            self.values.append(v)
+            
+        loaded_t = np.fromiter(times, dtype=np.float64)
+        if id == 1:
+            loaded_v = np.fromiter(values, dtype=np.float64)
+        else:
+            loaded_v = np.array(values)
+
+        if self._np_t is None:
+            self._np_t = loaded_t
+            self._np_v = loaded_v
+        else:
+            self._np_t = np.hstack((self._np_t, loaded_t))
+            self._np_v = np.hstack((self._np_v, loaded_v))
+
+        if len(self._np_t) > 2:
+            min_index = np.searchsorted(self._np_t, self._np_t[-1] - self.max_dt)
+            self._np_t = self._np_t[min_index:]
+            self._np_v = self._np_v[min_index:]
+            self.times = self.times[min_index:]
+            self.values = self.values[min_index:]
+
     def load_from_old_dir(self, start_time):
         save_dir = self.old_dir + self.key
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
         files = os.listdir(save_dir)
         self.values = []
         self.times = []
@@ -561,7 +564,8 @@ class LogLoader:
         to_load = []
         for file in files:
             stamp = file.replace(f"{self.key}_", "")
-            stamp = stamp.replace(f".dat", "")
+            stamp = stamp.removesuffix(".dat_z")
+            stamp = stamp.removesuffix(".dat")
             stamp = time.mktime(time.strptime(stamp, '%Y-%m-%d_%H_%M_%S'))
             if stamp > start_time:
                 to_load.append(f"{save_dir}/{file}")
@@ -588,7 +592,7 @@ class LogLoader:
                 self.file_end = 0
             elif self.file_end == file_size:
                 return self._np_t, self._np_v
-            
+
             self._load_values(filename, self.file_end)
             self.file_end = file_size
 
@@ -603,9 +607,8 @@ class LogServer:
     FOOTER = b'\0\0end\0\0'
     MAX_PACKET_SIZE = 32768
 
-    def make_request_message(key, start_hours=1, end_hours=0, since=None, until=None):
-        resp = {}
-        resp['key'] = key
+    def make_request_message(key, start_hours=1, end_hours=0, since=None, until=None, as_timestamps=True):
+        resp = {'key':key, "as_timestamps":as_timestamps}
         now = time.time()
         if since is not None:
             resp['since'] = since
@@ -643,23 +646,14 @@ class LogServer:
         resps.append(LogServer.FOOTER)
         return resps
     
-    def update_values(self, key, last_point=None, end=None, skip_points=1):
-        import datetime
-        from dateutil import parser
-
+    def update_values(self, key, last_point=None, end=None, skip_points=1, as_timestamps=True):
         with self.log_lock:
             if key in self.logs:
                 log = self.logs[key]
             else:
-                log = LogLoader(key)
+                log = LogLoader(key, SAVE_DIR, BACK_DIR)
                 self.logs[key] = log
-                log.check_old_dir()
-
-        x, y = log.load()
-        if x is None:
-            with self.log_lock:
-                del self.logs[key]
-            return b'error!'
+                log.process_old_dir()
         
         now = time.time()
         if end is None:
@@ -686,20 +680,43 @@ class LogServer:
                 start = last_point
             else:
                 start = parser.parse(last_point).timestamp()
+        
+        def get_values_from_log():
+            x, y = log.load(start_time=start)
+            
+            if x is None:
+                return None, None
+            
+            not_found = len(x) == 0 or start < x[0] or start > x[-1]
+            if not_found:
+                # Try another pass incase we need to load older logs
+                x, y = log.load(start_time=start)
+            return x, y
 
-        mask = (x>=start)&(x<=end)
-        x = x[mask]
-        y = y[mask]
+        x, y = get_values_from_log()
+        
+        if x is None:
+            with self.log_lock:
+                del self.logs[key]
+            return b'error!'
+
+        [start, end] = np.searchsorted(x, [start, end])
+        
+        x = x[start:end]
+        y = y[start:end]
 
         if skip_points > 1 and len(x) > skip_points:
             x = x[::skip_points]
             y = y[::skip_points]
 
         values = []
-        for i in range(len(x)):
-            values.append([datetime.datetime.fromtimestamp(x[i]).isoformat(), y[i]])
-        resp = json.dumps(values).encode()
-        return resp
+        if as_timestamps:
+            values = np.array([x, y]).tolist()
+        else:
+            for i in range(len(x)):
+                values.append([datetime.datetime.fromtimestamp(x[i]).isoformat(), y[i]])
+
+        return json.dumps(values).encode()
 
     def read_loop(self):
         try:
@@ -738,7 +755,8 @@ class LogServer:
                 last_point = values['since']
             if 'until' in values:
                 end = values['until']
-            resp = self.update_values(key, last_point, end, skip_points=skip_points)
+            as_timestamps = True if not 'as_timestamps' in values else values['as_timestamps']
+            resp = self.update_values(key, last_point, end, skip_points=skip_points, as_timestamps=as_timestamps)
 
             for resp in self.split(resp):
                 conn.send(resp)
@@ -761,11 +779,10 @@ class LogServer:
                     else:
                         key = file
                     if not key in self.logs:
-                        log = LogLoader(key)
+                        log = LogLoader(key, SAVE_DIR, BACK_DIR)
                         self.logs[key] = log
-                        log.check_old_dir()
                 for log in self.logs.values():
-                    log.check_old_dir()
+                    log.process_old_dir()
 
             for _ in range(600):
                 time.sleep(0.1)
@@ -775,6 +792,7 @@ class LogServer:
     def run(self):
         self._running_ = True
         print(f'Starting Log Server! {self.port}')
+
         while(self._running_):
             try:
                 self.read_loop()
@@ -813,7 +831,6 @@ def make_log_thread(addr=("0.0.0.0", 0)):
     return (server, thread)
 
 if __name__ == "__main__":
-    import sys
     import argparse
 
     parser = argparse.ArgumentParser(

@@ -901,10 +901,6 @@ class SingleDisplayWidget(QLabel):
         self.key = key
         self.fmt = fmt
 
-        self.update_values()
-        # Label for values       
-        self.update_labels()
-
     def get_dpi(self):
         return widget_dpi(self)
         
@@ -938,27 +934,21 @@ class SingleInputWidget(LineEdit):
         self.client = module.client
         self.key = key
         register_tracked_key(key)
+        self.input_active_checker = 0
         self.fmt = fmt
-        self.init_done = time.time()
         self.value = 0
 
         self.typing = typing
 
-        self.update_values()
-        # Entry for value      
-
         self.ctrl = ControlLine(self.update_value, self, self.fmt)
         self.returnPressed.connect(self.update_value)
         self.ctrl.ufmt = typing
-
-        self.init_done = True
-
     def get_dpi(self):
         return widget_dpi(self)
     
     def keyPressEvent(self, event):
         # give 10s for user to press enter to confirm
-        self.init_done = time.time() + 10
+        self.input_active_checker = time.time() + 10
         return super().keyPressEvent(event)
         
     def set_label_sizes(self, size):
@@ -971,13 +961,13 @@ class SingleInputWidget(LineEdit):
         self.setMinimumWidth(int(w))
 
     def update_values(self):
-        if self.init_done > time.time():
+        if self.input_active_checker > time.time():
             return
         var = get_tracked_value(self.key)
         if var is not None:
             self.value = var[1]
             self.update_labels()
-            self.init_done = time.time() + 1
+            self.input_active_checker = time.time() + 1
 
     def update_labels(self):
         pos = self.cursorPosition()
@@ -1006,19 +996,12 @@ class ValuesAndPower(QWidget):
 
         self._layout = QHBoxLayout()
 
-        self.init_done = False
-
-        self.update_values()
-
         if not type(labels) == list:
             labels = [labels]
         # Label for values        
         self.set_label = QLabel(labels[0])
 
         self.set_layout(labels)
-
-        self.update_labels()
-        self.init_done = True
 
     def get_dpi(self):
         return widget_dpi(self)
@@ -1068,12 +1051,9 @@ class ValuesAndPower(QWidget):
         self.power_button.update_values()
         if self.get_key_2 is not None:
             self.read_2_holder.update_values()
-        if self.init_done:
-            self.update_labels()
+        self.update_labels()
 
     def update_labels(self):
-        if not self.init_done:
-            self.set_entry.update_labels()
         self.read_1_holder.update_labels()
         if self.get_key_2 is not None:
             self.read_2_holder.update_labels()
@@ -1097,6 +1077,8 @@ class ValuesAndPowerPolarity(ValuesAndPower):
         return x > 0
 
     def polarity_factor(self, x):
+        if self.polarity_button.value is None:
+            return 0
         if isinstance(self.polarity_button.value, bool):
             return -x if self.polarity_button.value else x
         return x * self.polarity_button.value

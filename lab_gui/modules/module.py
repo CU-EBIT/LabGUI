@@ -243,6 +243,7 @@ class Module:
         self.saves = False
         self.default_init_menu = False
         self.menu_action = None
+        self.starts_floating = True
 
         # If this is true, this is considered a copied module
         # for cases where you have multiple of the same module allowed
@@ -303,7 +304,11 @@ class Module:
             self._dock_area = self._root._main
         self._active = self._root
         self._layout = QHBoxLayout(widget)
-        self._dock_area.addDock(self._dock, self.placement)
+        if self.starts_floating and len(self._dock_area.docks) > 0:
+            self._dock.area = self._dock_area
+            self._dock.float()
+        else:
+            self._dock_area.addDock(self._dock, self.placement)
         self._dock.sigClosed.connect(self.dock_closed)
 
     def open_settings(self, new_window=False):
