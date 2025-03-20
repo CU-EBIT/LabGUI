@@ -1,5 +1,5 @@
 # Core requirements
-PyQt6
+PySide6
 numpy
 pyqtgraph
 python-dateutil
