@@ -744,6 +744,7 @@ class ControlButton(QPushButton):
         self.locked = False
         self.checked_lock_tooltip = False
         self.value = default_value
+        self.timestamp = 0
         if toggle is not None:
             old_tgl = self.toggle
             def wrapped():
@@ -782,6 +783,7 @@ class ControlButton(QPushButton):
         else:
             var = self.client.get_value(self.key)
         if var is not None:
+            self.timestamp = var[0]
             self.value = var[1]
         self.isChecked()
 
@@ -903,6 +905,7 @@ class SingleDisplayWidget(QLabel):
 
         self.scale = scale
         self.value = 0
+        self.timestamp = 0
         if data_source is not None:
             self.get_value = data_source.get_value
         else:
@@ -925,6 +928,7 @@ class SingleDisplayWidget(QLabel):
     def update_values(self):
         var = self.get_value(self.key)
         if var is not None:
+            self.timestamp = var[0]
             self.value = var[1]
         self.update_labels()
 
@@ -948,6 +952,7 @@ class SingleInputWidget(LineEdit):
         self.input_active_checker = 0
         self.fmt = fmt
         self.value = 0
+        self.timestamp = 0
 
         self.typing = typing
 
@@ -976,6 +981,7 @@ class SingleInputWidget(LineEdit):
             return
         var = get_tracked_value(self.key)
         if var is not None:
+            self.timestamp = var[0]
             self.value = var[1]
             self.update_labels()
             self.input_active_checker = time.time() + 1
