@@ -76,6 +76,11 @@ QHeaderView::section
     background-color: {_light_grey_};
     color: {_black_};
 }}
+QTableWidget QTableCornerButton::section
+{{
+    background-color: {_light_grey_};
+    color: {_black_};
+}}
 """
 
 # This is a ValueListener (see modules.module.ValueListener)
@@ -1214,35 +1219,39 @@ class TableDisplayWidget(QTableWidget):
             self.setEditTriggers(TableNoEdit)
             self.clearSelection()
 
-        if self.init or True:
+        if self.init:
             self.resizeRowsToContents()
-            # Compute maximum length of a row label
-            w = self.verticalHeader().width()
-            # Compute height of the column headers
-            h = self.horizontalHeader().height()
 
-            for i in range(self.rowCount()):
-                _header = self.verticalHeaderItem(i)
-                header_f = _header.font()
-                header_t = _header.text()
-                metrics = QtGui.QFontMetrics(header_f)
-                self.setRowHeight(i, metrics.height())
-                h += self.rowHeight(i)
+        # Compute maximum length of a row label
+        w = self.verticalHeader().width()
+        # Compute height of the column headers
+        h = self.horizontalHeader().height()
 
-            columns_w = 0
-            dpi_scale = scale(widget_dpi(self))
-            for i in range(self.columnCount()):
-                _header = self.horizontalHeaderItem(i)
-                header_f = _header.font()
-                header_t = _header.text()
-                metrics = QtGui.QFontMetrics(header_f)
-                header_w = (len(header_t)+2)*metrics.averageCharWidth()*dpi_scale
-                column_w = max(column_widths[i], header_w)
-                self.setColumnWidth(i, column_w)
-                columns_w += column_w
-                for j in range(self.rowCount()):
-                    self.cellWidget(j, i).setFixedWidth(column_w)
-            w += columns_w
+        for i in range(self.rowCount()):
+            _header = self.verticalHeaderItem(i)
+            header_f = _header.font()
+            header_t = _header.text()
+            metrics = QtGui.QFontMetrics(header_f)
+            self.setRowHeight(i, metrics.height())
+            h += self.rowHeight(i)
+
+        columns_w = 0
+        dpi_scale = scale(widget_dpi(self))
+        for i in range(self.columnCount()):
+            _header = self.horizontalHeaderItem(i)
+            header_f = _header.font()
+            header_t = _header.text()
+            metrics = QtGui.QFontMetrics(header_f)
+            header_w = (len(header_t)+2)*metrics.averageCharWidth()*dpi_scale
+            column_w = max(column_widths[i], header_w)
+            self.setColumnWidth(i, column_w)
+            columns_w += column_w
+            for j in range(self.rowCount()):
+                self.cellWidget(j, i).setFixedWidth(column_w)
+        w += columns_w
+        _w = self.size().width()
+        _h = self.size().height()
+        if _w != w or _h != h:
             self.resize(w, h)
 
         self.init = False
