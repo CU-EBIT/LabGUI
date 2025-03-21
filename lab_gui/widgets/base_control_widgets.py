@@ -722,7 +722,6 @@ class ControlButton(QPushButton):
     This is a QPushButton which syncs status with the data_client, based on the given key. If not dataclient or module, it acts like a checkbox
     '''
     def __init__(self, module=None, key=None, text=["On", "Off"], predicate=lambda x: x, values=[True, False], colours=[_green_, _red_], display_only=False, data_source=None, default_value=None, toggle=None, *args, **kwargs):
-        print(args)
         super().__init__(*args, **kwargs)
         self.client = None
         self.tracked = False
