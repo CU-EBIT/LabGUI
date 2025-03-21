@@ -832,7 +832,7 @@ class InterlockButton(QPushButton):
     After unlock_dur, this button will automatically re-call the "lock" function.
     """
     def __init__(self, buttons:list, unlock_dur=10, on_lock = lambda self: self.set_locked_texture(), 
-                on_unlock = lambda self: self.set_unlocked_texture(), *args, **kwargs):
+                on_unlock = lambda self: self.set_unlocked_texture(), no_icon=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.unlock_time = 0
@@ -842,6 +842,7 @@ class InterlockButton(QPushButton):
         self.on_unlock = on_unlock
 
         self.buttons = buttons
+        self.no_icon = no_icon
         
         self.lock()
 
@@ -854,13 +855,15 @@ class InterlockButton(QPushButton):
         self.clicked.connect(toggle)
 
     def set_locked_texture(self):
-        icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
-        self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
+        if not self.no_icon:
+            icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
+            self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
         self.setStyleSheet(f"background-color : {_red_}")
 
     def set_unlocked_texture(self):
-        icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
-        self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
+        if not self.no_icon:
+            icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
+            self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
         self.setStyleSheet(f"background-color : {_green_}")
 
     def lock(self):
