@@ -1148,9 +1148,15 @@ class ValuesAndPowerPolarity(ValuesAndPower):
         self._layout.addWidget(self.polarity_button)
 
 class TableDisplayWidget(QTableWidget):
-    def __init__(self, module, headers, rows, cell_size=lambda cell, *_:cell.width(), font_size=9, *args, **kwargs):
+    def __init__(self, module, headers, rows, cell_size=lambda cell, *_:cell.width(), font_size=9, data_source=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = module.client
+        if data_source is not None:
+            self.get_value = data_source.get_value
+            self.register_value = lambda *_:()
+        else:
+            self.get_value = get_tracked_value
+            self.register_value = register_tracked_key
         self.col_headers = headers[0]
         self.row_headers = headers[1]
         self.rows = rows
@@ -1177,6 +1183,15 @@ class TableDisplayWidget(QTableWidget):
         self.pressed.connect(self.clearSelection)
         self.activated.connect(self.clearSelection)
         self.entered.connect(self.clearSelection)
+
+        self.horizontalHeader().setSectionsClickable(False)
+        self.horizontalHeader().setSectionsMovable(False)
+        self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Fixed)
+
+        self.verticalHeader().setSectionsClickable(False)
+        self.verticalHeader().setSectionsMovable(False)
+        self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Fixed)
+        
         return self
 
     def setRangeSelected(self, range, select):
@@ -1197,8 +1212,8 @@ class TableDisplayWidget(QTableWidget):
                 cell_key = f'{n},{m}'
                 var = None
                 if self.init:
-                    register_tracked_key(key)
-                var = get_tracked_value(key)
+                    self.register_value(key)
+                var = self.get_value(key)
                 val = None
                 if var is not None:
                     val = var
@@ -1233,8 +1248,7 @@ class TableDisplayWidget(QTableWidget):
         # Compute maximum length of a row label
         w = self.verticalHeader().width()
         # Compute height of the column headers
-        h = self.horizontalHeader().height()
-
+        h = self.horizontalHeader().height() if self.horizontalHeader().isVisible() else 0
         for i in range(self.rowCount()):
             _header = self.verticalHeaderItem(i)
             header_f = _header.font()
@@ -1260,6 +1274,6 @@ class TableDisplayWidget(QTableWidget):
         _w = self.size().width()
         _h = self.size().height()
         if _w != w or _h != h:
-            self.resize(w, h)
+            self.resize(w, h+4)
 
         self.init = False
