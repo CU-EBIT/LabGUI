@@ -4,7 +4,6 @@ import zlib
 
 import socket
 from datetime import datetime
-from dateutil import parser
 import time
 
 import scipy.signal as signal
@@ -15,12 +14,11 @@ import pyqtgraph as pg
 
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
-from ..utils import data_client
 from ..utils.data_client import BaseDataClient
 from ..utils.data_server import LogServer
 
 from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
-from .base_control_widgets import register_tracked_key, get_tracked_value
+from .base_control_widgets import register_tracked_key, get_tracked_value, addCrossHairs
 
 LOG_ACCESS = True
 
@@ -521,16 +519,40 @@ class Plot(QWidget):
         vb = self.plot_widget.getPlotItem().vb
         vb.setMouseMode(vb.RectMode)
 
+        addCrossHairs(self.plot_widget)
         # Legend for plot, if you set this before calling setup, you can override the legend
         self.legend = None
+        self.old_fontsize=None
+        self.shrunk=False
         self.font_size()
 
-    def font_size(self, axis='x,y', tick_size=12, title_size=16, line_width=3):
+    def font_size(self, axis='x,y', tick_size=12, title_size=16, line_width=3, legend_size=8, label_size=10, set_default=True):
+        if set_default:
+            self.old_fontsize ={ "tick_size":tick_size, "title_size":title_size, "line_width":line_width, "legend_size":legend_size, "set_default": False}
         title_font = QtGui.QFont()
         tick_font = QtGui.QFont()
         tick_font.setPixelSize(tick_size)
         title_font.setPixelSize(title_size)
+        label_font = QtGui.QFont()
+        label_font.setPixelSize(label_size)
+        self.plot_widget._coord_label.setFont(label_font)
         self.line_width = line_width
+        
+        for plots in self.plots:
+            for plot in plots:
+                old_pen = plot.opts['pen']
+                plot.setPen(color=old_pen.color(), width=line_width)
+
+        if self.legend is not None:
+            # leg = pg.LegendItem
+            self.legend.setLabelTextSize(f'{legend_size}pt')
+            for (line,item) in self.legend.items:
+                item.setAttr("size", f'{legend_size}pt')
+                item.setText(item.text)
+                line.setScale(legend_size/8)
+                
+            self.legend.updateSize()
+
         if 'x' in axis:
             self.x_axis.setTickFont(tick_font)
             self.x_axis.label.setFont(title_font)
@@ -542,10 +564,6 @@ class Plot(QWidget):
             self.y_2_axis.label.setFont(title_font)
             adjust_nudge(self.y_axis)
             adjust_nudge(self.y_2_axis)
-        for plots in self.plots:
-            for plot in plots:
-                old_pen = plot.opts['pen']
-                plot.setPen(color=old_pen.color(), width=line_width)
 
     def start(self):
         '''Starts a timer which we use for updating values'''
@@ -669,6 +687,15 @@ class Plot(QWidget):
 
         self.tick_callback() # Start by running our callback, this can be used to update settings, etc
 
+        size = self.plot_widget.size()
+        mini = size.width() < 128 or size.height() < 128
+        # print(mini, self.shrunk, size)
+        if (mini and not self.shrunk):
+            self.font_size(tick_size=4, title_size=4, line_width=2, legend_size=2, label_size=4, set_default=False)
+            self.shrunk = True
+        elif (not mini and self.shrunk):
+            self.shrunk = False
+            self.font_size(**self.old_fontsize)
         # Check if we are paused, if so, skip
         if self.settings.paused:
             return

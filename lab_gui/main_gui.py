@@ -242,12 +242,6 @@ class MasterGui(QMainWindow):
     #Opens About Window with description of software
     def about(self):
         # TODO about menu
-        # t = tk.Toplevel(self.root)
-        # t.wm_title("About")
-        # l = tk.Label(t, text = self.aboutMessage, font = font_14)
-        # l.pack(side="top", fill="both", expand=True, padx=100, pady=100)
-        # messageVar = tk.Message(t, text = self.copyrightMessage, fg='black', font = font_14, width = 600)
-        # messageVar.place(relx = 0.5, rely = 1, anchor = tk.S)
         pass
 
     # Wrapper for making a submenu, so that the keys and the submenu are in new scope.
@@ -369,9 +363,21 @@ class MasterGui(QMainWindow):
         else:
             self._main.addDock(dialog, 'top', dock)
 
-def start():
+def start(app_fns={}, post_construct=[], appStyle='Windows'):
     import sys
     app =  QApplication(sys.argv)
+    app.setStyle(appStyle)
+    for run in post_construct:
+        run(app)
+    for key, value in app_fns.items():
+        args = []
+        kwargs = {}
+        if isinstance(value, tuple):
+            args = value[0]
+            kwargs = value[1]
+        else:
+            args.append(value)
+        getattr(app, key)(*args, **kwargs)
     update_values()
     if len(instances) == 0:
         spawn_gui_proc()

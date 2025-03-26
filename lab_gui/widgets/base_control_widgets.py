@@ -76,6 +76,11 @@ QHeaderView::section
     background-color: {_light_grey_};
     color: {_black_};
 }}
+QTableWidget QTableCornerButton::section
+{{
+    background-color: {_light_grey_};
+    color: {_black_};
+}}
 """
 
 # This is a ValueListener (see modules.module.ValueListener)
@@ -158,6 +163,7 @@ def addCrossHairs(plot_widget, coord_label=None, add_copy_event=True):
     plot_widget.scene().sigMouseMoved.connect(mouseMoved)
     if add_copy_event:
         addDoubleClickCoordCopy(plot_widget)
+    plot_widget._coord_label = coord_label
     return coord_label
 
 def addDoubleClickCoordCopy(plot_widget):
@@ -716,7 +722,7 @@ class ControlButton(QPushButton):
     '''
     This is a QPushButton which syncs status with the data_client, based on the given key. If not dataclient or module, it acts like a checkbox
     '''
-    def __init__(self, module=None, key=None, text=["On", "Off"], predicate=lambda x: x, values=[True, False], colours=[_green_, _red_], display_only=False, data_source=None, default_value=None, toggle=None,  *args, **kwargs):
+    def __init__(self, module=None, key=None, text=["On", "Off"], predicate=lambda x: x, values=[True, False], colours=[_green_, _red_], display_only=False, data_source=None, default_value=None, toggle=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = None
         self.tracked = False
@@ -739,6 +745,7 @@ class ControlButton(QPushButton):
         self.locked = False
         self.checked_lock_tooltip = False
         self.value = default_value
+        self.timestamp = 0
         if toggle is not None:
             old_tgl = self.toggle
             def wrapped():
@@ -751,10 +758,16 @@ class ControlButton(QPushButton):
             self.clicked.connect(self.toggle)
         self.isChecked()
 
+        def update_style(button, value):
+            button.setText(button.text_opts[0] if button.predicate(value) else button.text_opts[1])
+            button.setStyleSheet(f"background-color : {button.colours[0] if button.predicate(value) else button.colours[1]}")
+
+        self.style_updater = update_style
+        self.default_tooltip = ''
+
     def isChecked(self):        
         if self.value is not None:
-            self.setText(self.text_opts[0] if self.predicate(self.value) else self.text_opts[1])
-            self.setStyleSheet(f"background-color : {self.colours[0] if self.predicate(self.value) else self.colours[1]}")
+            self.style_updater(self, self.value)
         return self.value
 
     def setChecked(self, a0: bool) -> None:
@@ -771,6 +784,7 @@ class ControlButton(QPushButton):
         else:
             var = self.client.get_value(self.key)
         if var is not None:
+            self.timestamp = var[0]
             self.value = var[1]
         self.isChecked()
 
@@ -819,7 +833,7 @@ class InterlockButton(QPushButton):
     After unlock_dur, this button will automatically re-call the "lock" function.
     """
     def __init__(self, buttons:list, unlock_dur=10, on_lock = lambda self: self.set_locked_texture(), 
-                on_unlock = lambda self: self.set_unlocked_texture(), *args, **kwargs):
+                on_unlock = lambda self: self.set_unlocked_texture(), no_icon=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.unlock_time = 0
@@ -829,6 +843,7 @@ class InterlockButton(QPushButton):
         self.on_unlock = on_unlock
 
         self.buttons = buttons
+        self.no_icon = no_icon
         
         self.lock()
 
@@ -841,13 +856,15 @@ class InterlockButton(QPushButton):
         self.clicked.connect(toggle)
 
     def set_locked_texture(self):
-        icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
-        self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
+        if not self.no_icon:
+            icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
+            self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
         self.setStyleSheet(f"background-color : {_red_}")
 
     def set_unlocked_texture(self):
-        icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
-        self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
+        if not self.no_icon:
+            icon = QtWidgets.QStyle.StandardPixmap.SP_MessageBoxWarning
+            self.setIcon(QtWidgets.QApplication.style().standardIcon(icon))
         self.setStyleSheet(f"background-color : {_green_}")
 
     def lock(self):
@@ -892,6 +909,7 @@ class SingleDisplayWidget(QLabel):
 
         self.scale = scale
         self.value = 0
+        self.timestamp = 0
         if data_source is not None:
             self.get_value = data_source.get_value
         else:
@@ -914,6 +932,7 @@ class SingleDisplayWidget(QLabel):
     def update_values(self):
         var = self.get_value(self.key)
         if var is not None:
+            self.timestamp = var[0]
             self.value = var[1]
         self.update_labels()
 
@@ -937,6 +956,7 @@ class SingleInputWidget(LineEdit):
         self.input_active_checker = 0
         self.fmt = fmt
         self.value = 0
+        self.timestamp = 0
 
         self.typing = typing
 
@@ -965,6 +985,7 @@ class SingleInputWidget(LineEdit):
             return
         var = get_tracked_value(self.key)
         if var is not None:
+            self.timestamp = var[0]
             self.value = var[1]
             self.update_labels()
             self.input_active_checker = time.time() + 1
@@ -1001,6 +1022,11 @@ class ValuesAndPower(QWidget):
         # Label for values        
         self.set_label = QLabel(labels[0])
 
+        self.read_1_label = None
+        self.read_2_label = None
+
+        self.custom_buttons = False
+
         self.set_layout(labels)
 
     def get_dpi(self):
@@ -1008,32 +1034,33 @@ class ValuesAndPower(QWidget):
 
     def set_layout(self, labels):
         self._layout.addWidget(self.power_button)
-        self._layout.addSpacing(4)
 
         self._layout.addWidget(self.set_label)
-        self._layout.addSpacing(2)
         self._layout.addWidget(self.set_entry)
-        self._layout.addSpacing(4)
 
         if len(labels) > 1 and labels[1] is not None:
             self.read_1_label = QLabel(labels[1])
             self._layout.addWidget(self.read_1_label)
-            self._layout.addSpacing(2)
         self._layout.addWidget(self.read_1_holder)
-        self._layout.addSpacing(4)
 
         if len(labels) > 2 and labels[2] is not None:
             self.read_2_label = QLabel(labels[2])
             self._layout.addWidget(self.read_2_label)
-            self._layout.addSpacing(2)
         if self.get_key_2 is not None:
             self._layout.addWidget(self.read_2_holder)
         self._layout.addStretch(1)
         
-    def set_label_sizes(self, label_chars, set_chars, get_1_chars, get_2_chars):
+    def set_label_sizes(self, label_chars, set_chars, get_1_chars, get_2_chars, read_1_chars=0, read_2_chars=0):
         dpi_scale = scale(self.get_dpi())
 
-        self.power_button.set_button_sizes(30 , 20)
+        if read_1_chars == 0:
+            read_1_chars = label_chars
+        if read_2_chars == 0:
+            read_2_chars = label_chars
+
+        if not self.custom_buttons:
+            self.power_button.set_button_sizes(30 , 20)
+        
         self.set_entry.set_label_sizes(set_chars)
         self.read_1_holder.set_label_sizes(get_1_chars)
         if self.get_key_2 is not None:
@@ -1042,8 +1069,19 @@ class ValuesAndPower(QWidget):
         label_chars *= dpi_scale
         fm = self.set_label.fontMetrics()
         w = label_chars*fm.averageCharWidth()
-        self.set_label.setMaximumWidth(int(w))
-        self.set_label.setMinimumWidth(int(w))
+        self.set_label.setFixedWidth(int(w))
+
+        if self.read_1_label != None:
+            read_1_chars *= dpi_scale
+            fm = self.read_1_label.fontMetrics()
+            w = read_1_chars*fm.averageCharWidth()
+            self.read_1_label.setFixedWidth(int(w))
+
+        if self.read_2_label != None:
+            read_2_chars *= dpi_scale
+            fm = self.read_2_label.fontMetrics()
+            w = read_2_chars*fm.averageCharWidth()
+            self.read_2_label.setFixedWidth(int(w))
 
     def update_values(self):
         self.set_entry.update_values()
@@ -1087,52 +1125,54 @@ class ValuesAndPowerPolarity(ValuesAndPower):
         self.polarity_button.update_values()
         super().update_values()
 
-    def set_label_sizes(self, label_chars, set_chars, get_1_chars, get_2_chars):
-        super().set_label_sizes(label_chars, set_chars, get_1_chars, get_2_chars)
+    def set_label_sizes(self, label_chars, set_chars, get_1_chars, get_2_chars, read_1_chars=0, read_2_chars=0):
+        super().set_label_sizes(label_chars, set_chars, get_1_chars, get_2_chars, read_1_chars, read_2_chars)
         self.polarity_button.set_button_sizes(20, 20)
 
     def set_layout(self, labels):
         self._layout.addWidget(self.power_button)
-        self._layout.addSpacing(4)
-
-        self._layout.addWidget(self.polarity_button)
-        self._layout.addSpacing(4)
-
         self._layout.addWidget(self.set_label)
-        self._layout.addSpacing(2)
         self._layout.addWidget(self.set_entry)
-        self._layout.addSpacing(4)
 
         if len(labels) > 1 and labels[1] is not None:
             self.read_1_label = QLabel(labels[1])
             self._layout.addWidget(self.read_1_label)
-            self._layout.addSpacing(2)
         self._layout.addWidget(self.read_1_holder)
-        self._layout.addSpacing(4)
         
         if len(labels) > 2 and labels[2] is not None:
             self.read_2_label = QLabel(labels[2])
             self._layout.addWidget(self.read_2_label)
-            self._layout.addSpacing(2)
         if self.get_key_2 is not None:
             self._layout.addWidget(self.read_2_holder)
+            
         self._layout.addStretch(1)
+        self._layout.addWidget(self.polarity_button)
 
 class TableDisplayWidget(QTableWidget):
-    def __init__(self, module, headers, rows, auto_size=True, *args, **kwargs):
+    def __init__(self, module, headers, rows, cell_size=lambda cell, *_:cell.width(), font_size=9, data_source=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = module.client
-        self.headers = headers
+        if data_source is not None:
+            self.get_value = data_source.get_value
+            self.register_value = lambda *_:()
+        else:
+            self.get_value = get_tracked_value
+            self.register_value = register_tracked_key
+        self.col_headers = headers[0]
+        self.row_headers = headers[1]
         self.rows = rows
         self.init = True
         self.cells = {}
         self.clickable = True
-        self.auto_size = auto_size
+        self.cell_size = cell_size
         self.padding = [' ', ' ']
         self._added_horiz = False
         self._added_vert = False
-        self.setColumnCount(len(headers))
-        self.setRowCount(len(rows))
+        self.font_size = font_size
+        self.setColumnCount(len(self.col_headers))
+        self.setRowCount(len(self.row_headers))
+        self.setVerticalHeaderLabels(self.row_headers)
+        self.setHorizontalHeaderLabels(self.col_headers)
         self.setViewportMargins(0,0,0,0)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -1144,6 +1184,15 @@ class TableDisplayWidget(QTableWidget):
         self.pressed.connect(self.clearSelection)
         self.activated.connect(self.clearSelection)
         self.entered.connect(self.clearSelection)
+
+        self.horizontalHeader().setSectionsClickable(False)
+        self.horizontalHeader().setSectionsMovable(False)
+        self.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Fixed)
+
+        self.verticalHeader().setSectionsClickable(False)
+        self.verticalHeader().setSectionsMovable(False)
+        self.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode.Fixed)
+        
         return self
 
     def setRangeSelected(self, range, select):
@@ -1154,24 +1203,18 @@ class TableDisplayWidget(QTableWidget):
     def update_values(self):
         # rows format is a list of lists as follows:
         # [ "Name", valueA, fmtA, valueB, fmtB, etc]
-        n = 0
-        for row in self.rows:
+        column_widths = [0.0 for _ in range(self.columnCount())]
+        for n in range(len(self.rows)):
+            row = self.rows[n]
             m = 0
-            # First add row label
-            if self.init:
-                label = f'{self.padding[0]}{row[0]}{self.padding[1]}'
-                cell = QLabel(label)
-                self.setCellWidget(n, m, cell)
-                self.cells[f'{n},{m}'] = cell
-            m = 1
-            for i in range(1,len(row),2):
+            for i in range(0,len(row),2):
                 key = row[i]
                 fmt = row[i + 1]
-
+                cell_key = f'{n},{m}'
                 var = None
                 if self.init:
-                    register_tracked_key(key)
-                var = get_tracked_value(key)
+                    self.register_value(key)
+                var = self.get_value(key)
                 val = None
                 if var is not None:
                     val = var
@@ -1179,28 +1222,63 @@ class TableDisplayWidget(QTableWidget):
                         var = fmt.format(var[1])
                     else:
                         var = fmt(var[1])
+                cell_widget = None
                 if self.init:
                     cell = QLabel(str(var))
-                    self.cells[f'{n},{m}'] = [cell, val]
+                    font = QtGui.QFont()
+                    font.setPointSize(self.font_size)
+                    cell.setFont(font)
+                    self.cells[cell_key] = [cell, val]
                     self.setCellWidget(n, m, cell)
+                    cell_widget = cell
                 else:
-                    cell = self.cells[f'{n},{m}']
-                    cell[0].setText(f'{self.padding[0]}{var}{self.padding[1]}')
+                    cell = self.cells[cell_key]
+                    cell_widget = cell[0]
+                    cell_widget.setText(f'{self.padding[0]}{var}{self.padding[1]}')
                     cell[1] = val
-                m += 1
-            n += 1
+                size = self.cell_size(cell_widget, m, n)
+                column_widths[m] = max(column_widths[m], size)
+                m += 1 
         if not self.clickable:
             self.setEditTriggers(TableNoEdit)
             self.clearSelection()
-        self.init = False
-        if self.auto_size:
-            self.setHorizontalHeaderLabels(self.headers)
-            self.resizeColumnsToContents()
+
+        if self.init:
             self.resizeRowsToContents()
-            h = self.horizontalHeader().height()
-            w = self.verticalHeader().width()
-            for i in range(self.rowCount()):
-                h += self.rowHeight(i)
-            for i in range(self.columnCount()):
-                w += self.columnWidth(i)
-            self.resize(w, h)
+
+        dpi_scale = scale(widget_dpi(self))
+        # Compute maximum length of a row label
+        w = 0
+        # Compute height of the column headers
+        h = self.horizontalHeader().height() if self.horizontalHeader().isVisible() else 0
+        for i in range(self.rowCount()):
+            _header = self.verticalHeaderItem(i)
+            header_f = _header.font()
+            header_t = _header.text()
+            metrics = QtGui.QFontMetricsF(header_f)
+            self.setRowHeight(i, metrics.height())
+            header_w = (len(header_t))*metrics.averageCharWidth()*dpi_scale
+            h += self.rowHeight(i)
+            w = max(w, header_w)
+        self.verticalHeader().setFixedWidth(w)
+        w = self.verticalHeader().width()
+
+        columns_w = 0
+        for i in range(self.columnCount()):
+            _header = self.horizontalHeaderItem(i)
+            header_f = _header.font()
+            header_t = _header.text()
+            metrics = QtGui.QFontMetricsF(header_f)
+            header_w = (len(header_t)+2)*metrics.averageCharWidth()*dpi_scale
+            column_w = max(column_widths[i], header_w)+2
+            self.setColumnWidth(i, column_w)
+            columns_w += column_w
+            for j in range(self.rowCount()):
+                self.cellWidget(j, i).setFixedWidth(column_w-1)
+        w += columns_w
+        _w = self.size().width()
+        _h = self.size().height()
+        if _w != w or _h != h:
+            self.resize(w+4, h+4)
+
+        self.init = False
