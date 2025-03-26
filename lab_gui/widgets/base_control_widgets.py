@@ -163,6 +163,7 @@ def addCrossHairs(plot_widget, coord_label=None, add_copy_event=True):
     plot_widget.scene().sigMouseMoved.connect(mouseMoved)
     if add_copy_event:
         addDoubleClickCoordCopy(plot_widget)
+    plot_widget._coord_label = coord_label
     return coord_label
 
 def addDoubleClickCoordCopy(plot_widget):
@@ -1245,35 +1246,39 @@ class TableDisplayWidget(QTableWidget):
         if self.init:
             self.resizeRowsToContents()
 
+        dpi_scale = scale(widget_dpi(self))
         # Compute maximum length of a row label
-        w = self.verticalHeader().width()
+        w = 0
         # Compute height of the column headers
         h = self.horizontalHeader().height() if self.horizontalHeader().isVisible() else 0
         for i in range(self.rowCount()):
             _header = self.verticalHeaderItem(i)
             header_f = _header.font()
             header_t = _header.text()
-            metrics = QtGui.QFontMetrics(header_f)
+            metrics = QtGui.QFontMetricsF(header_f)
             self.setRowHeight(i, metrics.height())
+            header_w = (len(header_t))*metrics.averageCharWidth()*dpi_scale
             h += self.rowHeight(i)
+            w = max(w, header_w)
+        self.verticalHeader().setFixedWidth(w)
+        w = self.verticalHeader().width()
 
         columns_w = 0
-        dpi_scale = scale(widget_dpi(self))
         for i in range(self.columnCount()):
             _header = self.horizontalHeaderItem(i)
             header_f = _header.font()
             header_t = _header.text()
-            metrics = QtGui.QFontMetrics(header_f)
+            metrics = QtGui.QFontMetricsF(header_f)
             header_w = (len(header_t)+2)*metrics.averageCharWidth()*dpi_scale
-            column_w = max(column_widths[i], header_w)
+            column_w = max(column_widths[i], header_w)+2
             self.setColumnWidth(i, column_w)
             columns_w += column_w
             for j in range(self.rowCount()):
-                self.cellWidget(j, i).setFixedWidth(column_w)
+                self.cellWidget(j, i).setFixedWidth(column_w-1)
         w += columns_w
         _w = self.size().width()
         _h = self.size().height()
         if _w != w or _h != h:
-            self.resize(w, h+4)
+            self.resize(w+4, h+4)
 
         self.init = False
