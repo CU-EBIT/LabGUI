@@ -103,7 +103,7 @@ class PlotModule(FigureModule):
         self.plot_widget.start()
 
     def post_figure(self):
-        self.get_plot_layout().addWidget(addCrossHairs(self.plot_widget.plot_widget))
+        self.get_plot_layout().addWidget(self.plot_widget.plot_widget._coord_label)
 
     def get_menus(self):
         _menu = Menu()
