@@ -11,15 +11,18 @@ Key_Enter = QtCore.Qt.Key.Key_Enter
 
 TableNoEdit = QtWidgets.QTableWidget.EditTrigger.NoEditTriggers
 
-# from PyQt5.QtCore import Qt
-# from PyQt5.QtWidgets import QComboBox, QLabel, QCheckBox, QHBoxLayout, QVBoxLayout,\
-#         QHBoxLayout, QWidget, QFrame, QPushButton, QLineEdit, QFileDialog, QTableWidget,\
-#         QMainWindow, QMenu, QAction, QApplication, QLayout, QGridLayout
-# from PyQt5 import QtCore, QtWidgets, QtGui
-# from PyQt5.QtGui import QIcon
+# Some QT5/QT6 float to int conversions for allowing calling with floats if tested in PySide6.
+def __replace_size_func(Class, Name, two_args=True):
+    __old__ = getattr(Class, Name)
+    # Dumb way to add a move function for now
+    def __new__(self, *args):
+        args = [int(a) if isinstance(a, float) else a for a in args]
+        __old__(self, *args)
+    setattr(Class, Name, __new__)
 
-# Key_Up = QtCore.Qt.Key_Up
-# Key_Down = QtCore.Qt.Key_Down
-# Key_Enter = QtCore.Qt.Key_Enter
-
-# TableNoEdit = QtWidgets.QTableWidget.NoEditTriggers
+__replace_size_func(QWidget, "move")
+__replace_size_func(QWidget, "resize")
+__replace_size_func(QWidget, "setFixedSize")
+__replace_size_func(QWidget, "setFixedWidth")
+__replace_size_func(QTableWidget, "setRowHeight")
+__replace_size_func(QTableWidget, "setColumnWidth")
