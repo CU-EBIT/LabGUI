@@ -363,9 +363,10 @@ class MasterGui(QMainWindow):
         else:
             self._main.addDock(dialog, 'top', dock)
 
-def start(app_fns={}, post_construct=[]):
+def start(app_fns={}, post_construct=[], appStyle='windowsvista'):
     import sys
     app =  QApplication(sys.argv)
+    app.setStyle(appStyle)
     for run in post_construct:
         run(app)
     for key, value in app_fns.items():
