@@ -73,10 +73,19 @@ def get_value_log(key, start=1, end=0, since=None, until=None):
     values = []
     if valid:
         packet = zlib.decompress(packet)
+        valid = packet != b'error!'
+        if not valid:
+            return valid, values
         # Otherwise we got some json to unpack values from
         values = json.loads(packet.decode())
-        # values = pickle.loads(packet)
-        valid = len(values) > 0
+        valid = len(values) > 0 and len(values[0]) > 0
+        if valid:
+            _x = values[0]
+            _y = values[1]
+            x1,y1 = zip(*sorted(zip(_x,_y)))
+            values[0] = list(x1)
+            values[1] = list(y1)
+        
     return valid, values
 
 _plots = {} # Map of the data logs
@@ -96,7 +105,7 @@ def pre_fill(key, start, end=0):
         _array = numpy.array(array)
         _x = _array[0]
         _y = _array[1]
-        
+
         # If we were valid, stuff the values into the array,
         # We do have a maxiumum number of values of _max_points however
         size = min(len(_x), _max_points)
@@ -186,7 +195,7 @@ def get_values(first:bool, key:str):
                 # First get the all array, up to preload hours
                 valid, array = get_value_log(key, since=last_stamp)
                 if not valid:
-                    print(f"Not valid for {key}")
+                    # print(f"Not valid for {key}")
                     return
                 roll_plot_values(plots, array[1], array[0])
             return
