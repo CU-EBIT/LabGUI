@@ -545,6 +545,8 @@ class Plot(QWidget):
         label_font = QtGui.QFont()
         label_font.setPixelSize(label_size)
         self.plot_widget._coord_label.setFont(label_font)
+        title = self.plot_widget.getPlotItem().titleLabel.text
+        self.plot_widget.getPlotItem().titleLabel.setText(title, size=f'{title_size}pt')
         self.line_width = line_width
         
         for plots in self.plots:
@@ -697,7 +699,8 @@ class Plot(QWidget):
         self.tick_callback() # Start by running our callback, this can be used to update settings, etc
 
         size = self.plot_widget.size()
-        mini = size.width() < 128 or size.height() < 128
+        size = min(size.width(), size.height())
+        mini = size < 128 if not self.shrunk else size < 256
         # print(mini, self.shrunk, size)
         if (mini and not self.shrunk):
             self.font_size(tick_size=4, title_size=4, line_width=2, legend_size=2, label_size=4, set_default=False)
