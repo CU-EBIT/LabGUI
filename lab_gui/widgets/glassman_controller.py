@@ -1,4 +1,5 @@
 import time
+from datetime import datetime
 
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
@@ -21,6 +22,7 @@ class DualGlassman(DeviceController, BasicVoltageSource):
         super().__init__(parent, name, fixed_size=True)
 
         self.set_keys = set_keys
+        self.last_set = [None, None]
         self.V5kV = 0
         self.V5kV_O = self.V5kV
 
@@ -136,6 +138,13 @@ class DualGlassman(DeviceController, BasicVoltageSource):
     def do_device_update(self):
         if self.device is None:
             return
+        if self.set_keys[1]!=None:
+            # TODO use a control line later...
+            t,v = self.client.get_float(self.set_keys[1])
+            print(t, v)
+            if t!=self.last_set[1]:
+                self.output_entry_3kV.box.setText(f"{v:.2f}")
+                self.set_voltage_3kV()
         if self.V5kV != self.V5kV_O:
             print(f"Setting Voltage: {self.V5kV}")
             self.device.set_voltage(self.V5kV, channel=0)
@@ -175,7 +184,9 @@ class DualGlassman(DeviceController, BasicVoltageSource):
             self.V3kV_O = self.V3kV
             self.V3kV = float(self.output_entry_3kV.box.text())
             if self.set_keys[1] != None:
-                self.client.set_float(self.set_keys[1], self.V3kV)
+                stamp = datetime.now()
+                self.client.set_float(self.set_keys[1], self.V3kV, timestamp=stamp)
+                self.last_set[1] = stamp
                 print("Updated", self.set_keys[1])
             self.saver.on_changed(self.output_entry_3kV.box)
         except Exception as err:

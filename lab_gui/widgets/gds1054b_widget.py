@@ -1,4 +1,5 @@
 import serial
+import pyvisa
 import struct
 import numpy
 import math
@@ -60,7 +61,7 @@ class GDS1054B(DeviceReader):
         def update_time_scale(*_):
             value = self.time_scale_line.get_value()
             def do_update():
-                self.device.write(f'horizontal:main:scale {value}\n'.encode())
+                self.write(f'horizontal:main:scale {value}')
             self.queue_cmd(do_update)
 
         def one_two_five(old, new, values=[1.0, 2.0, 5.0]):
@@ -121,7 +122,7 @@ class GDS1054B(DeviceReader):
             def update_channel(*_):
                 value = self.scale_box[channel].get_value()
                 def do_update():
-                    self.device.write(f':channel{channel}:scale {value}\n'.encode())
+                    self.write(f':channel{channel}:scale {value}')
                 self.queue_cmd(do_update)
 
             scale_line = ControlLine(lambda:(), LineEdit("5.0e+00"), "{:.1e}", 2e-3, 5)
@@ -141,6 +142,9 @@ class GDS1054B(DeviceReader):
         
         for channel in channels:
             addChannelCtrl(channel)
+
+    def write(self, cmd):
+        self.device.write(f"{cmd}\n".encode())
 
     def make_plot(self):
         self.plot_widget = Plot(x_axis=BetterAxisItem('bottom'))
@@ -195,10 +199,14 @@ class GDS1054B(DeviceReader):
         """Returns the data for the plotter to plot"""
         return self.plot_data[key]
 
+    def on_read_data(self, channel, yData, xData):
+        pass
+
     def do_device_update(self):
         for channel in self.channels:
             try:
                 vars, times = self.acquire(channel)
+                self.on_read_data(channel, vars, times)
             except Exception as err:
                 print(f"Error reading {channel}")
                 raise err
@@ -272,6 +280,81 @@ class GDS1054B(DeviceReader):
                 while dev.in_waiting:
                     dev.read_all()
                 return None, None
+        data = buf[skip:-1]
+        data = struct.unpack(f'{data_size}h',data)
+        data = scale * numpy.array(data, dtype='float64') / (25.0 * 256.0)
+        s = x * len(data)
+        times = numpy.linspace(-s/2, s/2, num=len(data))
+        
+        return data, times
+    
+class GDS1054B_VISA(GDS1054B):
+
+    def write(self, cmd):
+        self.device.write(cmd)
+
+    def open_device(self):
+        # We don't actually have a device, so we pretend to open something
+        try:
+            rm = pyvisa.ResourceManager()
+            print(self.addr)
+            self.device = rm.open_resource(self.addr)
+            self.device.read_termination = '\n'
+            self.device.write_termination = '\n'
+            self.device.timeout = 2000
+            print(self.device.query("*idn?"))
+            
+            for channel in self.channels:
+                scale = float(self.device.query(f'channel{channel}:scale?'))
+                self.scale_box[channel].box.setText(f"{scale:.1e}")
+
+        except Exception as err:
+            print(f"Error opening GDS1054B {err}")
+            self.device = None
+        return self.device != None
+
+    def acquire(self, channel):
+
+        curves = self.plot_widget.plot_widget.getPlotItem().curves
+        curve = curves[self.numbered[channel]]
+        if not curve.isVisible():
+            return None, None
+        dev = self.device
+
+        resp = dev.query(f':ACQ{channel}:STAT?').strip()
+        if resp != '1':
+            return None, None
+        
+        dev.write(f':ACQ{channel}:MEM?')
+        time.sleep(0.5)
+        buf = dev.read_raw()
+        print(buf, len(buf))
+        header = b''
+        data_size = 0
+        data_start = 0
+        for i in range(len(buf)):
+            if buf[i] == b'\n'[0]:
+                data_start = i + 1
+                break
+        header = buf[:data_start - 1].decode().split(";")
+        buf = buf[data_start:]
+        params = {}
+        for value in header:
+            if not ',' in value:
+                continue
+            split = value.split(',')
+            params[split[0]] = split[1]
+        data_size = int(header[1].split(',')[1])
+
+        pound = buf[0]
+        if pound != b'#'[0]:
+            print("Not correct char!")
+        n_header = int(buf[1:2].decode())
+        scale = float(params['Vertical Scale'])
+        x = float(params['Horizontal Scale'])
+        
+        skip = 2 + n_header
+
         data = buf[skip:-1]
         data = struct.unpack(f'{data_size}h',data)
         data = scale * numpy.array(data, dtype='float64') / (25.0 * 256.0)
