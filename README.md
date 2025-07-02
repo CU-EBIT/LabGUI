@@ -8,7 +8,7 @@ There are a few ways this can be implemented. Either via cloning the repository,
 
 Another way is to add this repository to yours as a submodule. An example of this can be found at https://github.com/CU-EBIT/LabGUI-Example
 
-### List if presently supported devices:
+### List of presently supported devices:
 
 -   Keithley Instruments 617 Electrometer
 -   Keithley Instruments DMM6500 Multimeter
@@ -22,3 +22,4 @@ Another way is to add this repository to yours as a submodule. An example of thi
 -   TENMA 72-2715 Programmable Power Supply
 -   GW INSTEK GDS-1054B Digital Storage Oscilloscope
 -   Keithley Instruments 2400 SourceMeter
+-   FNIRSi DPS-150 Power Supply
