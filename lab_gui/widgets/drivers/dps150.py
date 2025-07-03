@@ -136,7 +136,8 @@ class DPS150:
     def open(self, auto_read=False):
         assert(self.dev is None)
         dev = serial.Serial(self.addr,115200,timeout=0.1)
-        dev.set_buffer_size(1024,1024)
+        if hasattr(dev, 'set_buffer_size'):
+            dev.set_buffer_size(1024,1024)
         self.dev = dev
         open(self.dev)
         self.check_valid()
