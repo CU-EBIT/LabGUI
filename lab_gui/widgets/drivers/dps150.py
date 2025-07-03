@@ -70,7 +70,7 @@ def send_cmd(dev, header, command, argument, data):
     msg = header + command + argument + data
     msg += compute_checksum(msg)
     dev.write(msg)
-    time.sleep(0.025)
+    time.sleep(0.05)
 
 def read_response(dev:serial.Serial, callback=print):
     dt = dev.timeout
