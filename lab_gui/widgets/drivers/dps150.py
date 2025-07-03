@@ -205,6 +205,7 @@ class DPS150:
     
     def set_current(self, current:float):
         differs = abs(current-self.I_set) > 1e-5
+        self.I_set = current
         if differs:
             self.send_cmd(CMD_SET, CURRENT_SETPOINT, struct.pack('f', current))
             self.get_set_current()
@@ -224,6 +225,7 @@ class DPS150:
     
     def set_voltage(self, voltage:float):
         differs = abs(voltage-self.V_set) > 1e-5
+        self.V_set = voltage
         if differs:
             self.send_cmd(CMD_SET, VOLTAGE_SETPOINT, struct.pack('f', voltage))
             self.get_set_voltage()
@@ -231,6 +233,7 @@ class DPS150:
     
     def enable_output(self, state):
         differs = self.Output_enabled!=state
+        self.Output_enabled = state
         if differs:
             self.send_cmd(CMD_SET, OUTPUT_ENABLED, b'\x00' if not state else b'\x01')
             self.get_set_voltage()
