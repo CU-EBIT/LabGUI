@@ -126,6 +126,7 @@ class DPS150:
         self.addr = addr
         self.dev = None
         self.running = False
+        self.Output_enabled = False
 
     def __del__(self):
         if not hasattr(self, "dev"):
