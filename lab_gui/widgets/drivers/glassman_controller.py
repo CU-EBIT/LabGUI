@@ -39,7 +39,7 @@ class GlassmanController:
         self.task_out_d = nidaqmx.Task("do_task")
         from nidaqmx.constants import TerminalConfiguration
         for port in port_in:
-            self.task_in.ai_channels.add_ai_voltage_chan(port, terminal_config=TerminalConfiguration.BAL_DIFF)
+            self.task_in.ai_channels.add_ai_voltage_chan(port, terminal_config=TerminalConfiguration.DIFF)
         for port in port_out:
             self.task_out.ao_channels.add_ao_voltage_chan(port)
         for port in dig_out_port:

@@ -368,7 +368,7 @@ class DeviceReader(DeviceController):
             timestamp = time.time()
             if self.has_plot:
                 plots = self.plot_data
-                roll_plot_values(plots, self.value, timestamp)
+                roll_plot_values(plots, [self.value],[timestamp])
 
             if not self.custom_logging:
                 if self.do_log != self.do_log_O or self.data_key != self.data_key_O:
