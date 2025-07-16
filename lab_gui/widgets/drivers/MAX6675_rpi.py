@@ -19,6 +19,10 @@ class FloatCache:
         if self.cache_size <= 1:
             self.V = value
             return True
+        if value != value:
+            # Don't propagate NaNs
+            self.V = value
+            return True
         N = self.cache_size
         N_i = min(self.n+1, N)
         if N_i == N and validate and self.fails < 20:
@@ -26,7 +30,7 @@ class FloatCache:
             mean = self.V - value
             self.fails += 1
             if abs(mean - std) > 2*std:
-                print("Too much variance", mean, std)
+                print("Too much variance", mean, std, value)
                 return False
         self.V_sum -= self.cache[self.n%N]
         self.cache[self.n%N] = value
@@ -37,12 +41,10 @@ class FloatCache:
         return True
 
 class MAX6675:
-    def __init__(self, bus, addr, auto_run=True, cache_size=8):
+    def __init__(self, bus, addr, auto_run=True, cache_size=16):
         self.dev = spidev.SpiDev(bus, addr)
-        # Set speed to ensure full data is read
         self.dev.max_speed_hz = 2500000
         self.auto_run = auto_run
-        # Cache T for averaging
         self.T_cache = FloatCache(cache_size)
         self.last_measure = 0
         self.lock = threading.Lock()
@@ -54,7 +56,7 @@ class MAX6675:
                     t = time.time()
                     v = self._measure()
                     with self.lock:
-                        if self.T_cache.update(v, validate=True, min_std=3):
+                        if self.T_cache.update(v, validate=False, min_std=3):
                             self.last_measure = time.time()
                     dt = time.time() - t
                     # takes 220ms to do a full conversion according to docs
@@ -80,7 +82,8 @@ class MAX6675:
         # if it is high, it means open circuit
         if v & 0x4:
             return float('NaN')
-        # bottom 3 bits are: sign (always 0 according to docs), valid, id
+        # bottom 3 bits are: dummy sign (always 0), valid, id
+        # print(v&0x1, v&0x2, v>>3)
         v >>= 3
         # output is a short containing 4x t in C, starting at 0
         return v*0.25
