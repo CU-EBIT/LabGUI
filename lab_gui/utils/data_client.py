@@ -429,6 +429,7 @@ class DataCallbackServer:
             try:
                 conn, _ = self.connection.accept()
                 message = conn.recv(BUFSIZE)
+                conn.close()
                 if message == b'':
                     continue
                 self.handle_msg(message)

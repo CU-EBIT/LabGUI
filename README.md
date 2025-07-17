@@ -23,3 +23,4 @@ Another way is to add this repository to yours as a submodule. An example of thi
 -   GW INSTEK GDS-1054B Digital Storage Oscilloscope
 -   Keithley Instruments 2400 SourceMeter
 -   FNIRSi DPS-150 Power Supply
+-   MAX6675 Thermocouple reader, using spidev

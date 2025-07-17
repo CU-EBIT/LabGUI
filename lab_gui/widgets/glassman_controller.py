@@ -1,5 +1,4 @@
 import time
-from datetime import datetime
 
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
@@ -22,7 +21,6 @@ class DualGlassman(DeviceController, BasicVoltageSource):
         super().__init__(parent, name, fixed_size=True)
 
         self.set_keys = set_keys
-        self.last_set = [None, None]
         self.V5kV = 0
         self.V5kV_O = self.V5kV
 
@@ -138,30 +136,34 @@ class DualGlassman(DeviceController, BasicVoltageSource):
     def do_device_update(self):
         if self.device is None:
             return
-        if self.set_keys[1]!=None:
-            # TODO use a control line later...
-            t,v = self.client.get_float(self.set_keys[1])
-            print(t, v)
-            if t!=self.last_set[1]:
-                self.output_entry_3kV.box.setText(f"{v:.2f}")
-                self.set_voltage_3kV()
+        if self.set_keys[1] != None:
+            vars = self.client.get_float(self.set_keys[1])
+            if vars != None and self.V3kV != vars[1]:
+                self.output_entry_3kV.box.setText(f'{vars[1]:.2f}')
+                self.V3kV = vars[1]
+        if self.set_keys[0] != None:
+            vars = self.client.get_float(self.set_keys[0])
+            if vars != None and self.V5kV != vars[1]:
+                self.output_entry_5kV.box.setText(f'{vars[1]:.2f}')
+                self.V5kV = vars[1]
+
         if self.V5kV != self.V5kV_O:
-            print(f"Setting Voltage: {self.V5kV}")
+            print(f"Setting Voltage 5: {self.V5kV}")
             self.device.set_voltage(self.V5kV, channel=0)
             self.V5kV_O = self.V5kV
         if self.O5kV != self.O5kV_O:
-            print(f"Setting HV: {self.O5kV}")
+            print(f"Setting HV 5: {self.O5kV}")
             self.device.toggle_HV(1 if self.O5kV else 0, channel=0)
             self.O5kV_O = self.O5kV
         if self.V3kV != self.V3kV_O:
-            print(f"Setting Voltage: {self.V3kV}")
+            print(f"Setting Voltage 3: {self.V3kV}")
             self.device.set_voltage(self.V3kV, channel=1)
             self.V3kV_O = self.V3kV
         if self.O3kV != self.O3kV_O:
-            print(f"Setting HV: {self.O3kV}")
+            print(f"Setting HV 3: {self.O3kV}")
             self.device.toggle_HV(1 if self.O3kV else 0, channel=1)
             self.O3kV_O = self.O3kV
-        time.sleep(0.1)
+        time.sleep(0.05)
 
     def set_voltage_5kV(self):
         try:
@@ -184,9 +186,7 @@ class DualGlassman(DeviceController, BasicVoltageSource):
             self.V3kV_O = self.V3kV
             self.V3kV = float(self.output_entry_3kV.box.text())
             if self.set_keys[1] != None:
-                stamp = datetime.now()
-                self.client.set_float(self.set_keys[1], self.V3kV, timestamp=stamp)
-                self.last_set[1] = stamp
+                self.client.set_float(self.set_keys[1], self.V3kV)
                 print("Updated", self.set_keys[1])
             self.saver.on_changed(self.output_entry_3kV.box)
         except Exception as err:

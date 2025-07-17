@@ -100,6 +100,7 @@ def get_tracked_value(key):
         return value
     client = BaseDataClient()
     value = client.get_value(key)
+    client.close()
     callbacks.values[key] = value
     return value
 
@@ -107,6 +108,7 @@ def register_tracked_key(key):
     if callbacks.add_listener(key, callbacks.listener):
         client = BaseDataClient()
         client.register_callback_server(key, callbacks.port)
+        client.close()
 
 def widget_dpi(widget):
     """Retrieves the logicalDotsPerInch for the screen of the widget
@@ -756,7 +758,6 @@ class ControlButton(QPushButton):
             self.toggle = wrapped
         if not display_only:
             self.clicked.connect(self.toggle)
-        self.isChecked()
 
         def update_style(button, value):
             button.setText(button.text_opts[0] if button.predicate(value) else button.text_opts[1])
@@ -764,6 +765,7 @@ class ControlButton(QPushButton):
 
         self.style_updater = update_style
         self.default_tooltip = ''
+        self.isChecked()
 
     def isChecked(self):        
         if self.value is not None:
