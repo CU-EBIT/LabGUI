@@ -22,7 +22,7 @@ class ExampleModule(MainModule):
             main (MainModule): module having sub modules added
         """
         from ..widgets.test_device import TestDevice, ControlTestDevice
-        from lab_gui.utils.qt_helper import QtGui
+        from ...utils.qt_helper import QtGui
 
         module = TestDevice(self, id=27)
         self.plot_widget.addDock(module.dock)
@@ -51,7 +51,7 @@ class ExampleModule(MainModule):
         self._modules.append(module)
         _module = module
 
-        from lab_gui.modules.live_plot import PlotModule
+        from ...modules.live_plot import PlotModule
         # Here we have an example of adding a module instead of a widget
         # The module's constructor took the same as ours, ie the _root
         module = PlotModule.make_dummy_plotter(self._root)
@@ -61,7 +61,7 @@ class ExampleModule(MainModule):
         # Then add it to the dock. Note that we do not add it to our _modules
         self.plot_widget.addDock(module._dock, 'top')
 
-        from lab_gui.widgets.base_control_widgets import SaveModule
+        from ...widgets.base_control_widgets import SaveModule
 
         module = SaveModule()
         # By not specifying location, it goes below the rest.

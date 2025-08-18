@@ -467,7 +467,7 @@ class Settings(BaseSettings):
             if hasattr(self, key) and key in self._names_:
                 setattr(self, key, values[key])
         if hasattr(self, 'source_key'):
-            if self.source_key == 'None' or self.source_key.strip() == '':
+            if self.source_key == None or self.source_key == 'None' or self.source_key.strip() == '':
                 self.source_key = None
             self._default_option = self.source_key
 

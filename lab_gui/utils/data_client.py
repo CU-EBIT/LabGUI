@@ -368,6 +368,7 @@ class DataCallbackServer:
         self.last_heard_times = {}
 
         self._running_ = False
+        self._dummy_ = False
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
@@ -378,20 +379,20 @@ class DataCallbackServer:
         self.close()
 
     def close(self):
-        
-        try:
-            if BaseDataClient.DATA_SERVER_KEY is not None:
-                addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp')
-            else:
-                addr = self.client_addr
+        if not self._dummy_:
+            try:
+                if BaseDataClient.DATA_SERVER_KEY is not None:
+                    addr = find_server(BaseDataClient.DATA_SERVER_KEY, 'tcp')
+                else:
+                    addr = self.client_addr
 
-            client = BaseDataClient(addr)
-            client.init_connection()
-            callback_set = callback_request("???", self.port, closing=True)
-            client.send_msg(callback_set)
-            client.close()
-        except:
-            pass
+                client = BaseDataClient(addr)
+                client.init_connection()
+                callback_set = callback_request("???", self.port, closing=True)
+                client.send_msg(callback_set)
+                client.close()
+            except:
+                pass
 
         self._running_ = False
         if self.connection is not None:
@@ -539,9 +540,9 @@ class BaseDataClient:
             if self.addr is not None:
                 self.root_port = self.addr[1]
     
-    def register_callback_server(self, key, port):
+    def register_callback_server(self, key, port,rate=100):
         try:
-            callback_set = callback_request(key, port)
+            callback_set = callback_request(key, port, rate=rate)
             if not port in self.cb_ports:
                 self.cb_ports.append(port)
             response = self.send_msg(callback_set)[0]

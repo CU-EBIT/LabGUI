@@ -8,7 +8,6 @@ from pyqtgraph.dockarea.Dock import DockLabel
 
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
-from ..utils.data_client import BaseDataClient
 
 _red_ = '#B94700'
 _green_ = '#546223'
@@ -83,11 +82,21 @@ QTableWidget QTableCornerButton::section
 }}
 """
 
+def make_client():
+    from ..utils.data_client import BaseDataClient
+    return BaseDataClient()
+
+MQTT_CTRL_VALUES = []
+
+def addCtrlValue(key):
+    if not key in MQTT_CTRL_VALUES:
+        MQTT_CTRL_VALUES.append(key)
+
 # This is a ValueListener (see modules.module.ValueListener)
 callbacks = None
 
 def try_init_value(key, _default):
-    client = BaseDataClient()
+    client = make_client()
     vars = client.get_value(key)
     if vars is None:
         client.set_value(key, _default)
@@ -98,7 +107,7 @@ def get_tracked_value(key):
     value = callbacks.get_value(key)
     if value is not None:
         return value
-    client = BaseDataClient()
+    client = make_client()
     value = client.get_value(key)
     client.close()
     callbacks.values[key] = value
@@ -106,9 +115,7 @@ def get_tracked_value(key):
 
 def register_tracked_key(key):
     if callbacks.add_listener(key, callbacks.listener):
-        client = BaseDataClient()
-        client.register_callback_server(key, callbacks.port)
-        client.close()
+        callbacks.register_listener(key)
 
 def widget_dpi(widget):
     """Retrieves the logicalDotsPerInch for the screen of the widget
@@ -737,6 +744,8 @@ class ControlButton(QPushButton):
         self.key = key
         if self.key is None:
             self.client = None
+        else:
+            addCtrlValue(key)
         if isinstance(text, str):
             text = [text,text]
         self.text_opts = text
@@ -955,6 +964,7 @@ class SingleInputWidget(LineEdit):
         self.client = module.client
         self.key = key
         register_tracked_key(key)
+        addCtrlValue(key)
         self.input_active_checker = 0
         self.fmt = fmt
         self.value = 0
@@ -1151,7 +1161,7 @@ class ValuesAndPowerPolarity(ValuesAndPower):
         self._layout.addWidget(self.polarity_button)
 
 class TableDisplayWidget(QTableWidget):
-    def __init__(self, module, headers, rows, cell_size=lambda cell, *_:cell.width(), font_size=9, data_source=None, *args, **kwargs):
+    def __init__(self, module, headers, rows, cell_size=None, font_size=9, data_source=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.client = module.client
         if data_source is not None:
@@ -1166,6 +1176,13 @@ class TableDisplayWidget(QTableWidget):
         self.init = True
         self.cells = {}
         self.clickable = True
+        self.manual_size = cell_size is None
+        if self.manual_size:
+            def size(cell:QWidget):
+                if isinstance(cell, QLabel):
+                    return cell.fontMetrics().boundingRect(cell.text()).width() + 4
+                return cell.width()
+            cell_size = lambda cell, *_:size(cell)
         self.cell_size = cell_size
         self.padding = [' ', ' ']
         self._added_horiz = False
@@ -1259,7 +1276,7 @@ class TableDisplayWidget(QTableWidget):
             header_t = _header.text()
             metrics = QtGui.QFontMetricsF(header_f)
             self.setRowHeight(i, metrics.height())
-            header_w = (len(header_t))*metrics.averageCharWidth()*dpi_scale
+            header_w = metrics.boundingRect(header_t).width()+4
             h += self.rowHeight(i)
             w = max(w, header_w)
         self.verticalHeader().setFixedWidth(w)
@@ -1271,12 +1288,14 @@ class TableDisplayWidget(QTableWidget):
             header_f = _header.font()
             header_t = _header.text()
             metrics = QtGui.QFontMetricsF(header_f)
-            header_w = (len(header_t)+2)*metrics.averageCharWidth()*dpi_scale
-            column_w = max(column_widths[i], header_w)+2
+            header_w = metrics.boundingRect(header_t).width()+4
+            column_w = max(column_widths[i], header_w)
             self.setColumnWidth(i, column_w)
             columns_w += column_w
             for j in range(self.rowCount()):
-                self.cellWidget(j, i).setFixedWidth(column_w-1)
+                cell = self.cellWidget(j, i)
+                if cell.width()!=column_w:
+                    cell.setFixedWidth(column_w)
         w += columns_w
         _w = self.size().width()
         _h = self.size().height()

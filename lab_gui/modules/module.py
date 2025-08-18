@@ -1,5 +1,7 @@
 from math import ceil, floor
 import numpy
+from datetime import datetime
+import json
 
 import pyqtgraph as pg
 from pyqtgraph import AxisItem
@@ -564,6 +566,65 @@ class BetterAxisItem(AxisItem):
         style = ';'.join(['%s: %s' % (k, self.labelStyle[k]) for k in self.labelStyle])
         return "<span style='%s'>%s</span>" % (style, s)
 
+class ClientWrapper(BaseDataClient):
+    SET_WRAPPER = None
+    def __init__(self) -> None:
+        super().__init__()
+    def set_value(self, key, value, timestamp=None):
+        if ClientWrapper.SET_WRAPPER is not None:
+            return ClientWrapper.SET_WRAPPER.set_value(key, value, timestamp)
+        return super().set_value(key, value, timestamp)
+    def get_value(self, key):
+        if ClientWrapper.SET_WRAPPER is not None:
+            return ClientWrapper.SET_WRAPPER.get_value(key)
+        return super().get_value(key)
+
+class MQTTClient(BaseDataClient):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def close(self, _=False):
+        return True
+
+    def set_value(self, key, value, timestamp=None):
+        if timestamp is None:
+            timestamp = datetime.now()
+        # Determine if this is a control variable
+        from ..widgets import base_control_widgets
+        if key in base_control_widgets.MQTT_CTRL_VALUES:
+            # If this is the case, then whatever handles controls should
+            # handle the change of this variable, then feed it back as a data
+            # variable, via a manual call to publish_mqtt_data
+            publish_mqtt_data(key, value, timestamp, 'ctrl')
+        else:
+            # Here we should also go an publish to /raw/, so it gets logged
+            raw = data_client.pack_value(timestamp, value)
+            publish_mqtt_data(key, value, timestamp, sub_path='raw', to_publish=raw)
+            publish_mqtt_data(key, value, timestamp)
+        return True
+    
+    def get_value(self, key):
+        from ..widgets import base_control_widgets
+        return base_control_widgets.callbacks.get_value(key)
+
+def publish_mqtt_data(key, value, timestamp, sub_path='data', to_publish=None, immediate=False):
+    if not isinstance(timestamp, float):
+        timestamp = timestamp.timestamp()
+    import paho.mqtt.publish as publish
+    topic = f"{MQTT_TOPIC_ROOT}/{sub_path}/{key}"
+    if to_publish is None:
+        to_publish = {"time":timestamp, "value":value}
+        to_publish = json.dumps(to_publish)
+
+    def pub():
+        publish.single(topic, to_publish, hostname=MQTT_SERVER, auth=MQTT_AUTH, retain=True)
+    if immediate:
+        pub()
+    else:
+        import threading
+        pub_thread = threading.Thread(target=pub, daemon=True)
+        pub_thread.start()
+
 __values__ = {}
 __keys__ = []
 __open__ = True
@@ -577,8 +638,84 @@ local_server = None
 global access_lock
 access_lock = False
 
+global USE_MQTT
+USE_MQTT = False
+global MQTT_SERVER
+MQTT_SERVER = None
+global MQTT_TOPIC_ROOT
+MQTT_TOPIC_ROOT = ''
+MQTT_AUTH = {}
+MQTT_CTRL_HANDLERS = {}
+
+def set_MQTT(server='127.0.0.1', topic_root='feeds', auth={}):
+    global USE_MQTT
+    global MQTT_SERVER
+    global MQTT_TOPIC_ROOT
+    
+    USE_MQTT = True
+    MQTT_SERVER = server
+    MQTT_TOPIC_ROOT = topic_root
+    for key, value in auth.items():
+        MQTT_AUTH[key] = value
+    
+    from ..widgets import base_control_widgets
+    base_control_widgets.callbacks = MQTTListener()
+    def make_client():
+        return MQTTClient()
+    base_control_widgets.make_client = make_client
+
+def register_ctrl_handler(key, handler):
+    MQTT_CTRL_HANDLERS[key] = handler
+
+def run_mqtt():
+
+    import json
+    import paho.mqtt.client as mqtt
+    from ..widgets import base_control_widgets
+
+    # The callback for when the client receives a CONNACK response from the server.
+    def on_connect(client, userdata, flags, reason_code, properties):
+        print(f"Connected with result code {reason_code}")
+        client.subscribe(f"{MQTT_TOPIC_ROOT}/data/#")
+        client.subscribe(f"{MQTT_TOPIC_ROOT}/ctrl/#")
+
+    # The callback for when a PUBLISH message is received from the server.
+    def on_message(client, userdata, msg):
+        topic = msg.topic
+        if '/ctrl/' in topic:
+            key = topic.replace(f"{MQTT_TOPIC_ROOT}/ctrl/", "")
+            if key in MQTT_CTRL_HANDLERS:
+                args = json.loads(msg.payload.decode())
+                stamp = args['time']
+                value = args['value']
+                MQTT_CTRL_HANDLERS[key](key, stamp, value)
+            return
+        key = topic.replace(f"{MQTT_TOPIC_ROOT}/data/", "")
+        args = json.loads(msg.payload.decode())
+        stamp = args['time']
+        value = args['value']
+        base_control_widgets.callbacks.listener(key, (stamp, value))
+
+    mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
+    mqttc.on_connect = on_connect
+    mqttc.on_message = on_message
+
+    if MQTT_AUTH is not None:
+        mqttc.username = MQTT_AUTH['username']
+        mqttc.password = MQTT_AUTH['password']
+
+    mqttc.connect(MQTT_SERVER, 1883, 60)
+    mqttc.loop_forever()
+
 def update_values():
     global local_server
+    if USE_MQTT:
+        import threading
+        if local_server is None:
+            local_server = threading.Thread(target=run_mqtt, daemon=True)
+            local_server.start()
+        return
+
     from ..widgets import base_control_widgets
     if local_server is None:
         from ..utils import data_server as server
@@ -611,11 +748,6 @@ def update_values():
 
     base_control_widgets.callbacks = ValueListener(BaseDataClient.ADDR)
 
-class ClientWrapper(BaseDataClient):
-
-    def __init__(self) -> None:
-        super().__init__()
-
 class ValueListener(DataCallbackServer):
 
     def __init__(self, client_addr=BaseDataClient.ADDR):
@@ -623,9 +755,30 @@ class ValueListener(DataCallbackServer):
         self.values = {}
 
     def listener(self, key, value):
+        if(isinstance(value[0], float)):
+            value = (datetime.fromtimestamp(value[0]), value[1])
         self.values[key] = value
+
+    def register_listener(self, key):
+        client = BaseDataClient()
+        client.register_callback_server(key, self.port)
+        client.close()
 
     def get_value(self, key):
         if key in self.values:
             return self.values[key]
         return None
+
+class MQTTListener(ValueListener):
+    def __init__(self):
+        self.values = {}
+        self.connection = None
+        import threading
+        self.alive_lock = threading.Lock()
+        self._running_ = False
+        self._dummy_ = True
+        self.listeners = {}
+        self.last_heard_times = {}
+
+    def register_listener(self, key):
+        return

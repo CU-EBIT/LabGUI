@@ -1,11 +1,11 @@
 from pyqtgraph.dockarea.DockArea import DockArea
 
-from .module import Menu, ClientWrapper, FigureModule
+from .module import FigureModule
 
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
 
-from ..widgets.base_control_widgets import getLocalStyleSheet
+from ..widgets.base_control_widgets import getLocalStyleSheet, make_client
 
 def make_modules(main):
         '''
@@ -48,7 +48,7 @@ class MainModule(FigureModule):
         self._layouts = []
         self._modules = []
 
-        self.data_client = ClientWrapper()
+        self.data_client = make_client()
         self.update_rate = 500
         self.routine = None
 

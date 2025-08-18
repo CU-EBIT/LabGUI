@@ -10,6 +10,7 @@ from ...utils.qt_helper import QVBoxLayout, QHBoxLayout
 class TableDisplay(SubControlWidget):
     def __init__(self, parent, **args):
         super().__init__(**args)
+        
         self.client = parent.data_client
 
         self.table = self.make_table()
@@ -32,11 +33,11 @@ class TableDisplay(SubControlWidget):
         self.frame.setLayout(self._layout)
     
     def make_table(self):
-        headers = ["", "HV", "RV"]
+        headers = [["HV", "RV"], ["Section A", "Section B", "Section C"]]
         rows = [
-            ["Section A", "Pressure_HV_A", "{:.2e} mbar", "Pressure_RV_A", "{:.2e} mbar"],
-            ["Section B", "Pressure_HV_B", "{:.2e} mbar", "Pressure_RV_B", "{:.2e} mbar"],
-            ["Section C", "Pressure_HV_C", "{:.2e} mbar", "Pressure_RV_C", "{:.2e} mbar"],
+            ["Pressure_HV_A", "{:.2e} mbar", "Pressure_RV_A", "{:.2e} mbar"],
+            ["Pressure_HV_B", "{:.2e} mbar", "Pressure_RV_B", "{:.2e} mbar"],
+            ["Pressure_HV_C", "{:.2e} mbar", "Pressure_RV_C", "{:.2e} mbar"],
         ]
         table = TableDisplayWidget(self, headers, rows).no_clicky()
         return table
@@ -175,14 +176,14 @@ class ColourTableDisplay(TableDisplay):
         self.colourers = {}
         self.times = {}
         # A row
-        self.colourers[f'0,1'] = ColourHelper.colour_uhv
-        self.colourers[f'0,2'] = ColourHelper.colour_rv
+        self.colourers[f'0,0'] = ColourHelper.colour_uhv
+        self.colourers[f'0,1'] = ColourHelper.colour_rv
         # B row
-        self.colourers[f'1,1'] = ColourHelper.colour_uhv
-        self.colourers[f'1,2'] = ColourHelper.colour_rv
+        self.colourers[f'1,0'] = ColourHelper.colour_uhv
+        self.colourers[f'1,1'] = ColourHelper.colour_rv
         # C row
-        self.colourers[f'2,1'] = ColourHelper.colour_uhv
-        self.colourers[f'2,2'] = ColourHelper.colour_rv
+        self.colourers[f'2,0'] = ColourHelper.colour_uhv
+        self.colourers[f'2,1'] = ColourHelper.colour_rv
 
         return table
     

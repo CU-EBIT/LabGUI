@@ -9,10 +9,9 @@ from ..utils.qt_helper import *
 
 from .device_widget import DeviceReader
 from .plot_widget import Plot
-from .base_control_widgets import SingleInputWidget, SubControlWidget, ValuesAndPower, try_init_value, get_tracked_value, _red_, _green_
+from .base_control_widgets import SingleInputWidget, SubControlWidget, ValuesAndPower, make_client, try_init_value, get_tracked_value, _red_, _green_
 
 from ..modules.module import BetterAxisItem
-from ..utils.data_client import BaseDataClient
 
 class KE2400Mode(SubControlWidget):
     def __init__(self, parent, name, label='', add_to_frame=True, **kargs):
@@ -466,7 +465,7 @@ class KE2400(DeviceReader):
             if hasattr(self, key):
                 setattr(self, key, value)
 
-        self.client = BaseDataClient()
+        self.client = make_client()
         self.client.set_float(self.i_cmpl_key, 1e-1)
         self.client.set_float(self.v_0_key, -10)
         self.client.set_float(self.v_1_key, 10)

@@ -6,10 +6,9 @@ import os
 #  * import due to just being things from Qt
 from ..utils.qt_helper import *
 
-from ..widgets.base_control_widgets import SubControlWidget, FrameDock, StateSaver, addCrossHairs
+from ..widgets.base_control_widgets import SubControlWidget, FrameDock, StateSaver, addCrossHairs, make_client
 from .device_types.devices import BaseDevice
 from ..widgets.plot_widget import Plot, roll_plot_values
-from ..modules.module import ClientWrapper
 
 # Change this if you want to change how many points are kept in memory.
 _max_points = 1e5
@@ -27,7 +26,7 @@ class DeviceController(SubControlWidget, BaseDevice):
 
         super().__init__(**args)
 
-        self.client = ClientWrapper()
+        self.client = make_client()
             
         self.ended = False
         self._alive_ = False

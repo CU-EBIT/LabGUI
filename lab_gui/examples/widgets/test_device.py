@@ -4,10 +4,9 @@ import time
 # QT Widgets
 from ...utils.qt_helper import *
 
-from ...utils.data_client import BaseDataClient
-
-from ...widgets.base_control_widgets import SingleInputWidget, SingleDisplayWidget, SubControlWidget, try_init_value, get_tracked_value, _red_, _green_
+from ...widgets.base_control_widgets import SingleInputWidget, SubControlWidget, try_init_value, get_tracked_value, make_client, _red_, _green_
 from ...widgets.device_widget import DeviceReader
+from ...modules import module
 
 class TestDevice(DeviceReader):
     '''Pretends to be a device that responds with numbers'''
@@ -114,6 +113,16 @@ class ShiftScaleWidget(ControlTestWidget):
         self.shift_key = f'{parent.name}_SHIFT'
         self.scale_key = f'{parent.name}_SCALE'
 
+        # If we are using MQTT, then we will translate the ctrl value to the non ctrl one
+        if module.USE_MQTT:
+            def on_shift(key, stamp, value):
+                module.publish_mqtt_data(key, value, stamp)
+            def on_scale(key, stamp, value):
+                module.publish_mqtt_data(key, value, stamp)
+            module.register_ctrl_handler(self.shift_key, on_shift)
+            module.register_ctrl_handler(self.scale_key, on_scale)
+
+        # Then call init of the values
         try_init_value(self.shift_key, 0.0)
         try_init_value(self.scale_key, 1.0)
         
@@ -139,7 +148,7 @@ class ControlTestDevice(TestDevice):
         self.scale = 1
         self.shift = 0
 
-        self.client = BaseDataClient()
+        self.client = make_client()
 
         self.modes = []
         

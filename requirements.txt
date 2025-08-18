@@ -4,6 +4,9 @@ numpy
 pyqtgraph
 python-dateutil
 
+# MQTT for using MQTT mode
+paho-mqtt
+
 # The below depend on the modules used
 pyvisa
 pyserial
