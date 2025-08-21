@@ -2,6 +2,9 @@ from math import ceil, floor
 import numpy
 from datetime import datetime
 import json
+import time
+import zlib
+import threading
 
 import pyqtgraph as pg
 from pyqtgraph import AxisItem
@@ -11,6 +14,7 @@ from ..utils.qt_helper import *
 from ..utils import input_parser
 from ..utils import data_client
 from ..utils.data_client import BaseDataClient, DataCallbackServer
+from ..utils.data_server import LogServer
 from ..widgets.base_control_widgets import getGlobalStyleSheet
 from ..widgets.base_control_widgets import LineEdit, FrameDock, ControlLine, StateSaver
 
@@ -580,6 +584,8 @@ class ClientWrapper(BaseDataClient):
         return super().get_value(key)
 
 class MQTTClient(BaseDataClient):
+    LAST_ALL_CHECK = 0
+    all_values = {}
     def __init__(self) -> None:
         super().__init__()
 
@@ -606,6 +612,42 @@ class MQTTClient(BaseDataClient):
     def get_value(self, key):
         from ..widgets import base_control_widgets
         return base_control_widgets.callbacks.get_value(key)
+    
+    def get_all(self):
+        now = time.time()
+        if now - MQTTClient.LAST_ALL_CHECK < 15:
+            return MQTTClient.all_values
+        MQTTClient.LAST_ALL_CHECK = now
+        import socket
+        try:
+            # Query list of keys from data server
+            client_socket = socket.socket()     # instantiate
+            client_socket.settimeout(10)        # Set a longish timeout, as we can request many things
+            client_socket.connect(BaseDataClient.DATA_LOG_HOST)# connect to the server
+            message = 'keys?'
+            client_socket.send(message.encode())
+
+            read = b'' # Build the response, by combining recv calls
+            data = client_socket.recv(LogServer.MAX_PACKET_SIZE)  # receive response
+            while data:
+                read += data
+                data = client_socket.recv(LogServer.MAX_PACKET_SIZE)  # receive response
+            packet = read
+            # If we are a combined packet, we have these as header and footer
+            s = read.index(LogServer.HEADER)
+            e = read.index(LogServer.FOOTER)
+            if s >= 0 and e >= 0:
+                packet = read[s + len(LogServer.HEADER):e]
+                packet = zlib.decompress(packet)
+            else:
+                packet = b'error!'
+            keys = json.loads(packet)
+            for key in keys:
+                if not key in MQTTClient.all_values:
+                    MQTTClient.all_values[key] = (datetime.now(), 0.0)
+        except Exception as err:
+            print(err)
+        return MQTTClient.all_values
 
 def publish_mqtt_data(key, value, timestamp, sub_path='data', to_publish=None, immediate=False):
     if not isinstance(timestamp, float):
@@ -621,7 +663,6 @@ def publish_mqtt_data(key, value, timestamp, sub_path='data', to_publish=None, i
     if immediate:
         pub()
     else:
-        import threading
         pub_thread = threading.Thread(target=pub, daemon=True)
         pub_thread.start()
 
@@ -664,6 +705,11 @@ def set_MQTT(server='127.0.0.1', topic_root='feeds', auth={}):
         return MQTTClient()
     base_control_widgets.make_client = make_client
 
+    global local_server
+    if local_server is None:
+        local_server = threading.Thread(target=run_mqtt, daemon=True)
+        local_server.start()
+
 def register_ctrl_handler(key, handler):
     MQTT_CTRL_HANDLERS[key] = handler
 
@@ -675,12 +721,18 @@ def run_mqtt():
 
     # The callback for when the client receives a CONNACK response from the server.
     def on_connect(client, userdata, flags, reason_code, properties):
-        print(f"Connected with result code {reason_code}")
-        client.subscribe(f"{MQTT_TOPIC_ROOT}/data/#")
-        client.subscribe(f"{MQTT_TOPIC_ROOT}/ctrl/#")
+        if reason_code!='Success':
+            print(f"MQTT result code: {reason_code}")
+        callbacks = base_control_widgets.callbacks
+        for key in callbacks.keys:
+            # print(f"On Connect subscribe: {key}")
+            client.subscribe(f"{MQTT_TOPIC_ROOT}/data/{key}")
+            client.subscribe(f"{MQTT_TOPIC_ROOT}/ctrl/{key}")
+        callbacks.connection = client
 
     # The callback for when a PUBLISH message is received from the server.
     def on_message(client, userdata, msg):
+        callbacks = base_control_widgets.callbacks
         topic = msg.topic
         if '/ctrl/' in topic:
             key = topic.replace(f"{MQTT_TOPIC_ROOT}/ctrl/", "")
@@ -694,7 +746,10 @@ def run_mqtt():
         args = json.loads(msg.payload.decode())
         stamp = args['time']
         value = args['value']
-        base_control_widgets.callbacks.listener(key, (stamp, value))
+
+        # print(f"Read {key} {value}")
+        callbacks.listener(key, (stamp, value))
+        callbacks.connection = client
 
     mqttc = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     mqttc.on_connect = on_connect
@@ -704,22 +759,22 @@ def run_mqtt():
         mqttc.username = MQTT_AUTH['username']
         mqttc.password = MQTT_AUTH['password']
 
-    mqttc.connect(MQTT_SERVER, 1883, 60)
-    mqttc.loop_forever()
+    while True:
+        try:
+            print("Connecting to MQTT")
+            mqttc.connect(MQTT_SERVER, 1883, 60)
+            mqttc.loop_forever()
+        except Exception as err:
+            print(f"Error in mqttc loop {err}")
 
 def update_values():
     global local_server
     if USE_MQTT:
-        import threading
-        if local_server is None:
-            local_server = threading.Thread(target=run_mqtt, daemon=True)
-            local_server.start()
         return
 
     from ..widgets import base_control_widgets
     if local_server is None:
         from ..utils import data_server as server
-        import time
         found = False
 
         if BaseDataClient.DATA_SERVER_KEY is None:
@@ -753,6 +808,7 @@ class ValueListener(DataCallbackServer):
     def __init__(self, client_addr=BaseDataClient.ADDR):
         super().__init__(client_addr=client_addr)
         self.values = {}
+        self.timeout = 0.5
 
     def listener(self, key, value):
         if(isinstance(value[0], float)):
@@ -772,13 +828,47 @@ class ValueListener(DataCallbackServer):
 class MQTTListener(ValueListener):
     def __init__(self):
         self.values = {}
+        self.keys = []
+        self.timedout = []
         self.connection = None
-        import threading
         self.alive_lock = threading.Lock()
+        self.write_lock = threading.Lock()
         self._running_ = False
         self._dummy_ = True
         self.listeners = {}
         self.last_heard_times = {}
+        self.timeout = 0.5
+
+    def listener(self, key, value):
+        if(isinstance(value[0], float)):
+            value = (datetime.fromtimestamp(value[0]), value[1])
+        with self.write_lock:
+            MQTTClient.all_values[key] = value
+            self.values[key] = value
 
     def register_listener(self, key):
-        return
+        if not key in self.keys:
+            self.keys.append(key)
+            if self.connection is not None:
+                def sub():
+                    while not self.connection.is_connected():
+                        time.sleep(0.001)
+                    # print(f"Subscribing to {key}")
+                    self.connection.subscribe(f"{MQTT_TOPIC_ROOT}/data/{key}")
+                    self.connection.subscribe(f"{MQTT_TOPIC_ROOT}/ctrl/{key}")
+                t = threading.Thread(target=sub, daemon=True)
+                t.start()
+    
+    def get_value(self, key):
+        resp = super().get_value(key)
+        if resp is not None or key in self.keys:
+            return resp
+        # Try registering the value
+        self.register_listener(key)
+        # give a little bit of time to try to return the value
+        start = time.time()
+        while resp is None and time.time() - start < self.timeout:
+            time.sleep(0.001)
+            with self.write_lock:
+                resp = super().get_value(key)
+        return resp

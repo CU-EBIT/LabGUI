@@ -17,8 +17,8 @@ from ..utils.qt_helper import *
 from ..utils.data_client import BaseDataClient
 from ..utils.data_server import LogServer
 
-from ..modules.module import ClientWrapper, BetterAxisItem, BaseSettings
-from .base_control_widgets import register_tracked_key, get_tracked_value, addCrossHairs
+from ..modules.module import BetterAxisItem, BaseSettings
+from .base_control_widgets import register_tracked_key, get_tracked_value, addCrossHairs, make_client
 
 LOG_ACCESS = True
 
@@ -46,26 +46,31 @@ def get_value_log(key, start=1, end=0, since=None, until=None):
         # Assemble message based on parameters
         message = LogServer.make_request_message(key, start, end, since, until)
 
+        # print(f"Sending {message}")
         # Send message to server
         client_socket.send(message.encode())
+        # print(f"Sent {message}")
         
         read = b'' # Build the response, by combining recv calls
         data = client_socket.recv(LogServer.MAX_PACKET_SIZE)  # receive response
         while data:
             read += data
             data = client_socket.recv(LogServer.MAX_PACKET_SIZE)  # receive response
-        packet = read
-        # If we are a combined packet, we have these as header and footer
-        s = read.index(LogServer.HEADER)
-        e = read.index(LogServer.FOOTER)
-        if s >= 0 and e >= 0:
-            packet = read[s + len(LogServer.HEADER):e]
-        else:
+        if read.endswith(b'error!'):
             packet = b'error!'
+        else:
+            packet = read
+            # If we are a combined packet, we have these as header and footer
+            s = read.index(LogServer.HEADER)
+            e = read.index(LogServer.FOOTER)
+            if s >= 0 and e >= 0:
+                packet = read[s + len(LogServer.HEADER):e]
+            else:
+                packet = b'error!'
 
         client_socket.close()  # close the connection
     except Exception as err:
-        print(f'Log Update Error: {err}')
+        print(f'Log Update Error for {key}: {err}')
         return False, []
 
     # If we got b'error!', then it wasn't a valid response
@@ -85,7 +90,9 @@ def get_value_log(key, start=1, end=0, since=None, until=None):
             x1,y1 = zip(*sorted(zip(_x,_y)))
             values[0] = list(x1)
             values[1] = list(y1)
-        
+    # print(f'Read: {len(values)} ({valid})')
+    # if valid:
+    #     print(values[0][0],values[1][0])
     return valid, values
 
 _plots = {} # Map of the data logs
@@ -403,7 +410,7 @@ class Settings(BaseSettings):
         super().make_option_dropdown(setting, key)
 
         def on_update():
-            client = ClientWrapper()
+            client = make_client()
             _map = client.get_all()
             option = setting._option
             old_selected = setting.get_value()
@@ -481,7 +488,7 @@ class Plot(QWidget):
 
         self.show_avg = True # Whether we include a smoothed plot
 
-        self.client = ClientWrapper()
+        self.client = make_client()
 
         self.settings = Settings() # Settings object we use
 
