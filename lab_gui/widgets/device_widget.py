@@ -207,11 +207,6 @@ class DeviceReader(DeviceController):
         # If set to true, we will not manage logging from the log_button. This also affects whether the value goes to the data_client
         self.custom_logging = False
 
-        # Pre-populate array with the start values
-        times = numpy.full(int(_max_points), time.time())
-        values = numpy.full(int(_max_points), self.value)
-        avgs = numpy.full(int(_max_points), self.value)
-
         self.do_log = True
         self.do_log_O = False
         self.log_button = QCheckBox("Log Values")
@@ -227,24 +222,7 @@ class DeviceReader(DeviceController):
         self.has_plot = has_plot
         if has_plot:
             self.make_plot()
-            self.settings = self.plot_widget.settings
-            self.settings.y_axis_fmt = '{:.3f}'
-            if plot_title != '???':
-                self.settings.title_fmt = plot_title
-            self.settings.axis_name = axis_title
-
-            self.plot_data = [times, values, avgs, False, 0]
-
-            self.plot_update_backup = self.plot_widget.update_values
-            self.plot_get_data_backup = self.plot_widget.get_data
-
-            self.set_data_key(data_key)
-
-            self.plot_widget.setup()
-            self.plot_widget.start()
-
-            self.plot_dock = FrameDock(widget=self.plot_widget,menu_fn=menu_fn,help_fn=None)
-            self.plot_dock.label.setText(name)
+            self.setup_plot(plot_title, axis_title, data_key, menu_fn, name)
 
         self.full_layout = QVBoxLayout()
         self.full_layout.setSpacing(0)
@@ -266,6 +244,31 @@ class DeviceReader(DeviceController):
         """This makes the plot_widget, implementers can add custom arguments to their plot, etc by replacing this function
         """
         self.plot_widget = Plot()
+
+    def setup_plot(self, plot_title, axis_title, data_key, menu_fn, name):
+        self.settings = self.plot_widget.settings
+        self.settings.y_axis_fmt = '{:.3f}'
+        if plot_title != '???':
+            self.settings.title_fmt = plot_title
+        self.settings.axis_name = axis_title
+
+        # Pre-populate array with the start values
+        times = numpy.full(int(_max_points), time.time())
+        values = numpy.full(int(_max_points), self.value)
+        avgs = numpy.full(int(_max_points), self.value)
+
+        self.plot_data = [times, values, avgs, False, 0]
+
+        self.plot_update_backup = self.plot_widget.update_values
+        self.plot_get_data_backup = self.plot_widget.get_data
+
+        self.set_data_key(data_key)
+
+        self.plot_widget.setup()
+        self.plot_widget.start()
+
+        self.plot_dock = FrameDock(widget=self.plot_widget,menu_fn=menu_fn,help_fn=None)
+        self.plot_dock.label.setText(name)
 
     def set_data_key(self, data_key):
         """
